@@ -17,37 +17,39 @@ def make_triage(vlm: VLM) -> Any:
         # Stub: simple keyword-based classification
         description = state.get("description", "").lower()
 
-        trade = "other"
-        for keyword, t in [
-            ("gas", "gas"),
-            ("furnace", "hvac"),
-            ("hvac", "hvac"),
-            ("heat", "hvac"),
-            ("air condition", "hvac"),
-            ("ac ", "hvac"),
-            ("pipe", "plumbing"),
-            ("leak", "plumbing"),
-            ("plumb", "plumbing"),
-            ("drain", "plumbing"),
-            ("toilet", "plumbing"),
-            ("faucet", "plumbing"),
-            ("water", "water_intrusion"),
-            ("flood", "water_intrusion"),
-            ("electric", "electrical"),
-            ("wiring", "electrical"),
-            ("outlet", "electrical"),
-            ("circuit", "electrical"),
-            ("structur", "structural"),
-            ("crack", "structural"),
-            ("foundation", "structural"),
-            ("appliance", "appliance"),
-            ("dishwasher", "appliance"),
-            ("fridge", "appliance"),
-            ("washer", "appliance"),
-        ]:
-            if keyword in description:
-                trade = t
-                break
+        # Respect pre-set trade (e.g., from intake or API)
+        trade = state.get("trade") or "other"
+        if trade == "other":
+            for keyword, t in [
+                ("gas", "gas"),
+                ("furnace", "hvac"),
+                ("hvac", "hvac"),
+                ("heat", "hvac"),
+                ("air condition", "hvac"),
+                ("ac ", "hvac"),
+                ("pipe", "plumbing"),
+                ("leak", "plumbing"),
+                ("plumb", "plumbing"),
+                ("drain", "plumbing"),
+                ("toilet", "plumbing"),
+                ("faucet", "plumbing"),
+                ("water", "water_intrusion"),
+                ("flood", "water_intrusion"),
+                ("electric", "electrical"),
+                ("wiring", "electrical"),
+                ("outlet", "electrical"),
+                ("circuit", "electrical"),
+                ("structur", "structural"),
+                ("crack", "structural"),
+                ("foundation", "structural"),
+                ("appliance", "appliance"),
+                ("dishwasher", "appliance"),
+                ("fridge", "appliance"),
+                ("washer", "appliance"),
+            ]:
+                if keyword in description:
+                    trade = t
+                    break
 
         urgency = "routine"
         if any(w in description for w in ["gas", "flood", "fire", "emergency", "sparking"]):
