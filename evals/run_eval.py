@@ -8,6 +8,11 @@ Reports metrics per spec §10.2:
 - cost/ticket (stub: $0)
 - latency
 
+Checkpointer: PostgresSaver by default (INV-6). The eval proves real
+Postgres checkpoint round-trips, including CLARIFY resume across a fresh
+connection. Set HERO_EVAL_MEMORY_CHECKPOINTER=1 for local dev without
+Postgres — CI must never set this flag.
+
 Usage: uv run python evals/run_eval.py
 """
 
@@ -20,7 +25,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from hero.adapters.stub_calibrator import StubCalibrator
@@ -28,6 +32,7 @@ from hero.adapters.stub_catalog import StubCatalogResolver
 from hero.adapters.stub_embedder import StubEmbedder
 from hero.adapters.stub_reranker import StubReranker
 from hero.adapters.stub_vlm import StubVLM
+from hero.config import get_settings
 from hero.graph.build import build_graph
 
 
@@ -37,7 +42,29 @@ def load_golden_tickets() -> list[dict[str, Any]]:
     return [json.loads(p.read_text()) for p in sorted(tickets_dir.glob("*.json"))]
 
 
-def _build_graph(checkpointer: MemorySaver) -> Any:
+def _make_checkpointer() -> Any:
+    """Create checkpointer. PostgresSaver by default (INV-6).
+
+    MemorySaver ONLY when HERO_EVAL_MEMORY_CHECKPOINTER=1 is explicitly set.
+    """
+    settings = get_settings()
+    if settings.hero_eval_memory_checkpointer:
+        from langgraph.checkpoint.memory import MemorySaver
+
+        print("[CHECKPOINTER] MemorySaver (HERO_EVAL_MEMORY_CHECKPOINTER=1)")
+        return MemorySaver()
+
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    db_url = settings.database_url
+    sync_url = db_url.replace("+asyncpg", "").replace("postgresql://", "postgresql://")
+    print(f"[CHECKPOINTER] PostgresSaver ({db_url.split('@')[-1] if '@' in db_url else 'local'})")
+    saver = PostgresSaver.from_conn_string(sync_url)
+    saver.setup()
+    return saver
+
+
+def _build_graph(checkpointer: Any) -> Any:
     """Build graph with stub adapters and the given checkpointer."""
     return build_graph(
         embedder=StubEmbedder(),
@@ -49,12 +76,12 @@ def _build_graph(checkpointer: MemorySaver) -> Any:
     )
 
 
-async def run_ticket(checkpointer: MemorySaver, ticket: dict[str, Any]) -> dict[str, Any]:
+async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any]:
     """Run a single golden ticket through the graph, handling CLARIFY if needed.
 
     For CLARIFY tickets: simulates a process restart by destroying the graph
     instance after interrupt and creating a new one with the same checkpointer.
-    This proves checkpoint-based resumability across process boundaries (INV-6).
+    With PostgresSaver, this proves real DB round-trip resumability (INV-6).
     """
     ticket_id = ticket["ticket_id"]
     expected = ticket["expected"]
@@ -82,10 +109,11 @@ async def run_ticket(checkpointer: MemorySaver, ticket: dict[str, Any]) -> dict[
         print(f"  [CLARIFY] Graph interrupted. pending_question={result['pending_question']!r}")
         print("  [CLARIFY] Destroying graph instance (simulating process termination)...")
 
-        # Destroy graph1 — delete the reference
+        # Destroy graph1
         del graph1
 
-        # --- New graph instance (simulating process restart) ---
+        # --- New graph instance, same checkpointer (simulates process restart) ---
+        # With PostgresSaver this is a fresh graph reading state from Postgres.
         print("  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)")
         graph2 = _build_graph(checkpointer)
 
@@ -100,6 +128,7 @@ async def run_ticket(checkpointer: MemorySaver, ticket: dict[str, Any]) -> dict[
         print(f"  [CLARIFY] Resuming with answer: {clarify_answer!r}")
         result = await graph2.ainvoke(Command(resume=clarify_answer), config=config)
         print(f"  [CLARIFY] Resumed successfully. clarify_rounds={result.get('clarify_rounds')}")
+
     elapsed = time.monotonic() - start
 
     return {
@@ -167,9 +196,7 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
 async def main() -> int:
     """Run all golden tickets and print results."""
     tickets = load_golden_tickets()
-
-    # Single shared checkpointer — proves state persists across graph instances
-    checkpointer = MemorySaver()
+    checkpointer = _make_checkpointer()
 
     print(f"\n{'=' * 70}")
     print(f"Hero.AI Eval — {len(tickets)} golden tickets")

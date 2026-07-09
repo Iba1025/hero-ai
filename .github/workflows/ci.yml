@@ -84,13 +84,29 @@ jobs:
 
   evals:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hero
+          POSTGRES_PASSWORD: hero
+          POSTGRES_DB: hero
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hero"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://hero:hero@localhost:5432/hero
+      # HERO_EVAL_MEMORY_CHECKPOINTER is deliberately NOT set.
+      # Eval runs against real PostgresSaver (INV-6).
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.x"
       - run: uv sync --all-extras
-      - name: Run eval scaffold
+      - name: Run eval scaffold (PostgresSaver checkpointer)
         run: uv run python evals/run_eval.py

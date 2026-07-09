@@ -78,6 +78,16 @@ class Settings(BaseSettings):
     max_corrective_rounds: int = Field(default=2)
     corrective_timeout_s: float = Field(default=10.0)
 
+    # ── Dev-only flags (never set in CI/prod) ────────────────────────────
+    hero_eval_memory_checkpointer: bool = Field(
+        default=False,
+        description=(
+            "Use MemorySaver instead of PostgresSaver. "
+            "Local dev convenience ONLY — CI must never set this. "
+            "INV-6 requires persistent checkpoints in all real runs."
+        ),
+    )
+
 
 def region_guard(settings: Settings) -> None:
     """Fail loudly if any detectable store resolves outside Canada (INV-2).
