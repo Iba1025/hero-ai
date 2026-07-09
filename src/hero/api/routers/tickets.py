@@ -48,7 +48,7 @@ class TicketStatusResponse(BaseModel):
 @router.post("", response_model=CreateTicketResponse)
 async def create_ticket(request: CreateTicketRequest) -> CreateTicketResponse:
     """Create a ticket and start the graph run."""
-    graph = get_graph()
+    graph = await get_graph()
     ticket_id = str(uuid.uuid4())
     thread_id = f"ticket-{ticket_id}"
 
@@ -79,7 +79,7 @@ async def create_ticket(request: CreateTicketRequest) -> CreateTicketResponse:
 @router.get("/{ticket_id}", response_model=TicketStatusResponse)
 async def get_ticket(ticket_id: str) -> TicketStatusResponse:
     """Get ticket status, diagnosis, and claims."""
-    graph = get_graph()
+    graph = await get_graph()
     thread_id = f"ticket-{ticket_id}"
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -114,7 +114,7 @@ async def get_ticket(ticket_id: str) -> TicketStatusResponse:
 @router.post("/{ticket_id}/clarify-answer")
 async def clarify_answer(ticket_id: str, request: ClarifyAnswerRequest) -> dict[str, str]:
     """Resume an interrupted run with a clarification answer."""
-    graph = get_graph()
+    graph = await get_graph()
     thread_id = f"ticket-{ticket_id}"
     config = {"configurable": {"thread_id": thread_id}}
 

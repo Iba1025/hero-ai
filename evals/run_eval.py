@@ -8,7 +8,7 @@ Reports metrics per spec §10.2:
 - cost/ticket (stub: $0)
 - latency
 
-Checkpointer: PostgresSaver by default (INV-6). The eval proves real
+Checkpointer: AsyncPostgresSaver by default (INV-6). The eval proves real
 Postgres checkpoint round-trips, including CLARIFY resume across a fresh
 connection. Set HERO_EVAL_MEMORY_CHECKPOINTER=1 for local dev without
 Postgres — CI must never set this flag.
@@ -42,8 +42,8 @@ def load_golden_tickets() -> list[dict[str, Any]]:
     return [json.loads(p.read_text()) for p in sorted(tickets_dir.glob("*.json"))]
 
 
-def _make_checkpointer() -> Any:
-    """Create checkpointer. PostgresSaver by default (INV-6).
+async def _make_checkpointer() -> Any:
+    """Create checkpointer. AsyncPostgresSaver by default (INV-6).
 
     MemorySaver ONLY when HERO_EVAL_MEMORY_CHECKPOINTER=1 is explicitly set.
     """
@@ -54,17 +54,18 @@ def _make_checkpointer() -> Any:
         print("[CHECKPOINTER] MemorySaver (HERO_EVAL_MEMORY_CHECKPOINTER=1)")
         return MemorySaver()
 
-    from langgraph.checkpoint.postgres import PostgresSaver
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from psycopg_pool import AsyncConnectionPool
 
     db_url = settings.database_url
     sync_url = db_url.replace("+asyncpg", "")
-    print(f"[CHECKPOINTER] PostgresSaver ({db_url.split('@')[-1] if '@' in db_url else 'local'})")
+    host = db_url.split("@")[-1] if "@" in db_url else "local"
+    print(f"[CHECKPOINTER] AsyncPostgresSaver ({host})")
 
-    import psycopg
-
-    conn = psycopg.connect(sync_url, autocommit=True)
-    saver = PostgresSaver(conn)
-    saver.setup()
+    pool = AsyncConnectionPool(conninfo=sync_url, open=False)
+    await pool.open()
+    saver = AsyncPostgresSaver(pool)
+    await saver.setup()
     return saver
 
 
@@ -80,12 +81,14 @@ def _build_graph(checkpointer: Any) -> Any:
     )
 
 
-async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any]:
+async def run_ticket(
+    checkpointer: Any, ticket: dict[str, Any]
+) -> dict[str, Any]:
     """Run a single golden ticket through the graph, handling CLARIFY if needed.
 
     For CLARIFY tickets: simulates a process restart by destroying the graph
     instance after interrupt and creating a new one with the same checkpointer.
-    With PostgresSaver, this proves real DB round-trip resumability (INV-6).
+    With AsyncPostgresSaver, this proves real DB round-trip resumability (INV-6).
     """
     ticket_id = ticket["ticket_id"]
     expected = ticket["expected"]
@@ -117,7 +120,7 @@ async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any
         del graph1
 
         # --- New graph instance, same checkpointer (simulates process restart) ---
-        # With PostgresSaver this is a fresh graph reading state from Postgres.
+        # With AsyncPostgresSaver, the new graph reads state from Postgres.
         print("  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)")
         graph2 = _build_graph(checkpointer)
 
@@ -200,7 +203,7 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
 async def main() -> int:
     """Run all golden tickets and print results."""
     tickets = load_golden_tickets()
-    checkpointer = _make_checkpointer()
+    checkpointer = await _make_checkpointer()
 
     print(f"\n{'=' * 70}")
     print(f"Hero.AI Eval — {len(tickets)} golden tickets")

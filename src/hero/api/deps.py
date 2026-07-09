@@ -35,8 +35,8 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def _make_checkpointer(settings: Settings) -> Any:
-    """Create the checkpointer. PostgresSaver by default (INV-6).
+async def make_checkpointer(settings: Settings) -> Any:
+    """Create the checkpointer. AsyncPostgresSaver by default (INV-6).
 
     MemorySaver ONLY when HERO_EVAL_MEMORY_CHECKPOINTER=1 is explicitly set.
     CI must never set this flag.
@@ -46,27 +46,24 @@ def _make_checkpointer(settings: Settings) -> Any:
 
         return MemorySaver()
 
-    from langgraph.checkpoint.postgres import PostgresSaver
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from psycopg_pool import AsyncConnectionPool
 
-    db_url = settings.database_url
-    sync_url = db_url.replace("+asyncpg", "")
-    # from_conn_string is a context manager; use psycopg.Connection directly
-    import psycopg
-
-    conn = psycopg.connect(sync_url, autocommit=True)
-    saver = PostgresSaver(conn)
-    saver.setup()
+    db_url = settings.database_url.replace("+asyncpg", "")
+    pool = AsyncConnectionPool(conninfo=db_url, open=False)
+    await pool.open()
+    saver = AsyncPostgresSaver(pool)
+    await saver.setup()
     return saver
 
 
-@lru_cache(maxsize=1)
-def get_graph() -> Any:
-    """Build and cache the compiled graph.
+async def get_graph() -> Any:
+    """Build the compiled graph.
 
-    Uses PostgresSaver checkpointer (INV-6) — fails loudly without DATABASE_URL.
+    Uses AsyncPostgresSaver checkpointer (INV-6) — fails loudly without DATABASE_URL.
     """
     settings = get_settings()
-    checkpointer = _make_checkpointer(settings)
+    checkpointer = await make_checkpointer(settings)
     return build_graph(
         embedder=StubEmbedder(),
         reranker=StubReranker(),
