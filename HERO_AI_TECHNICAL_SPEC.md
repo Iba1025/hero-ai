@@ -108,7 +108,7 @@ hero/
 
 ---
 
-## 3. Configuration `[SPEC]`
+## 3. Configuration `[IMPL: src/hero/config.py]`
 
 All config via `pydantic-settings` in `src/hero/config.py`. No `os.environ` reads elsewhere.
 
