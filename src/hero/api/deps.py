@@ -48,10 +48,13 @@ def _make_checkpointer(settings: Settings) -> Any:
 
     from langgraph.checkpoint.postgres import PostgresSaver
 
-    # Convert asyncpg URL to psycopg for the sync PostgresSaver
     db_url = settings.database_url
-    sync_url = db_url.replace("+asyncpg", "").replace("postgresql://", "postgresql://")
-    saver = PostgresSaver.from_conn_string(sync_url)
+    sync_url = db_url.replace("+asyncpg", "")
+    # from_conn_string is a context manager; use psycopg.Connection directly
+    import psycopg
+
+    conn = psycopg.connect(sync_url, autocommit=True)
+    saver = PostgresSaver(conn)
     saver.setup()
     return saver
 

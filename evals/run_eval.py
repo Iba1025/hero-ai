@@ -57,9 +57,13 @@ def _make_checkpointer() -> Any:
     from langgraph.checkpoint.postgres import PostgresSaver
 
     db_url = settings.database_url
-    sync_url = db_url.replace("+asyncpg", "").replace("postgresql://", "postgresql://")
+    sync_url = db_url.replace("+asyncpg", "")
     print(f"[CHECKPOINTER] PostgresSaver ({db_url.split('@')[-1] if '@' in db_url else 'local'})")
-    saver = PostgresSaver.from_conn_string(sync_url)
+
+    import psycopg
+
+    conn = psycopg.connect(sync_url, autocommit=True)
+    saver = PostgresSaver(conn)
     saver.setup()
     return saver
 

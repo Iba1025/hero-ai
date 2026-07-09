@@ -1,8 +1,9 @@
-"""Shared fixtures for invariant tests — testcontainers Postgres."""
+"""Shared fixtures for invariant tests — Postgres via DATABASE_URL or testcontainers."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
+import os
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
@@ -18,8 +19,10 @@ from hero.graph.build import build_graph
 from hero.storage.models import Base
 
 
-def _docker_available() -> bool:
-    """Check if Docker daemon is reachable."""
+def _has_postgres() -> bool:
+    """True if DATABASE_URL is set or Docker is available for testcontainers."""
+    if os.environ.get("DATABASE_URL"):
+        return True
     try:
         import docker  # type: ignore[import-untyped]
 
@@ -30,32 +33,36 @@ def _docker_available() -> bool:
         return False
 
 
-requires_docker = pytest.mark.skipif(not _docker_available(), reason="Docker daemon not available")
+requires_docker = pytest.mark.skipif(
+    not _has_postgres(), reason="No Postgres available (no DATABASE_URL, no Docker)"
+)
 
 
 @pytest.fixture(scope="session")
-def postgres_container() -> Generator[Any, None, None]:
-    """Start a Postgres container for the test session."""
-    if not _docker_available():
-        pytest.skip("Docker daemon not available")
+def postgres_url() -> str:
+    """Async connection URL for Postgres.
 
+    Prefers DATABASE_URL env var (CI service container).
+    Falls back to testcontainers if Docker is available.
+    """
+    env_url = os.environ.get("DATABASE_URL")
+    if env_url:
+        # CI provides DATABASE_URL pointing to the service container
+        return env_url
+
+    # Local dev with Docker: spin up testcontainers
     from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
 
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg
-
-
-@pytest.fixture(scope="session")
-def postgres_url(postgres_container: Any) -> str:
-    """Async connection URL for the testcontainer Postgres."""
-    url: str = postgres_container.get_connection_url()
-    # testcontainers returns psycopg2 URL; convert to asyncpg
-    return url.replace("psycopg2", "asyncpg").replace("postgresql://", "postgresql+asyncpg://")
+    container = PostgresContainer("postgres:16-alpine")
+    container.start()
+    url: str = container.get_connection_url()
+    url = url.replace("psycopg2", "asyncpg").replace("postgresql://", "postgresql+asyncpg://")
+    return url
 
 
 @pytest.fixture
 async def db_session(postgres_url: str) -> AsyncGenerator[AsyncSession, None]:
-    """Create tables and yield a session, then drop tables."""
+    """Create tables, yield a session, drop tables."""
     engine = create_async_engine(postgres_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
