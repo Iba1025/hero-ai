@@ -18,6 +18,7 @@ from sqlalchemy import (
     Index,
     Text,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -31,7 +32,7 @@ class Ticket(Base):
     __tablename__ = "ticket"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     org_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     building_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
@@ -57,7 +58,7 @@ class Media(Base):
     __tablename__ = "media"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
@@ -76,7 +77,7 @@ class SensorReading(Base):
     __tablename__ = "sensor_reading"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False)
@@ -92,7 +93,7 @@ class Diagnosis(Base):
     __tablename__ = "diagnosis"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
     run_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -118,7 +119,7 @@ class DiagnosisClaim(Base):
     __tablename__ = "diagnosis_claim"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     diagnosis_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("diagnosis.id"), nullable=False
@@ -134,7 +135,7 @@ class WorkOrder(Base):
     __tablename__ = "work_order"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
     diagnosis_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -158,7 +159,7 @@ class ContractorStatement(Base):
     __tablename__ = "contractor_statement"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, server_default="gen_random_uuid()"
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
     diagnosis_id: Mapped[uuid.UUID] = mapped_column(

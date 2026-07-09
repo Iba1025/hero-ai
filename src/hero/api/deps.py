@@ -50,7 +50,11 @@ async def make_checkpointer(settings: Settings) -> Any:
     from psycopg_pool import AsyncConnectionPool
 
     db_url = settings.database_url.replace("+asyncpg", "")
-    pool = AsyncConnectionPool(conninfo=db_url, open=False)
+    pool = AsyncConnectionPool(
+        conninfo=db_url,
+        open=False,
+        kwargs={"autocommit": True},
+    )
     await pool.open()
     saver = AsyncPostgresSaver(pool)
     await saver.setup()

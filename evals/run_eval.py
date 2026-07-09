@@ -62,7 +62,11 @@ async def _make_checkpointer() -> Any:
     host = db_url.split("@")[-1] if "@" in db_url else "local"
     print(f"[CHECKPOINTER] AsyncPostgresSaver ({host})")
 
-    pool = AsyncConnectionPool(conninfo=sync_url, open=False)
+    pool = AsyncConnectionPool(
+        conninfo=sync_url,
+        open=False,
+        kwargs={"autocommit": True},
+    )
     await pool.open()
     saver = AsyncPostgresSaver(pool)
     await saver.setup()
@@ -81,9 +85,7 @@ def _build_graph(checkpointer: Any) -> Any:
     )
 
 
-async def run_ticket(
-    checkpointer: Any, ticket: dict[str, Any]
-) -> dict[str, Any]:
+async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any]:
     """Run a single golden ticket through the graph, handling CLARIFY if needed.
 
     For CLARIFY tickets: simulates a process restart by destroying the graph
