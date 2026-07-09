@@ -128,7 +128,7 @@ detectable (INV-2). Add a `region_guard()` check in app startup.
 
 ---
 
-## 4. Graph State `[SPEC]`
+## 4. Graph State `[IMPL: src/hero/graph/state.py]`
 
 `src/hero/graph/state.py`. Single typed state object; nodes take and return `TicketState` deltas.
 
@@ -288,7 +288,7 @@ LangGraph checkpoint tables: managed by `langgraph-checkpoint-postgres` — do n
 
 ---
 
-## 6. Interfaces `[SPEC]` — `src/hero/interfaces/`
+## 6. Interfaces `[IMPL: src/hero/interfaces/, src/hero/adapters/stub_*.py]` — `src/hero/interfaces/`
 
 All Protocols. Nodes import Protocols only; `config.EMBEDDER_IMPL` etc. select adapters at startup.
 
