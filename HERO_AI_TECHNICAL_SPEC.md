@@ -204,7 +204,7 @@ class TicketState(BaseModel):
 
 ---
 
-## 5. Data Model `[SPEC]` — target DDL (implement via Alembic; migrations become source of truth)
+## 5. Data Model `[IMPL: src/hero/storage/models.py, alembic/versions/0001_initial_schema.py]` — target DDL (implement via Alembic; migrations become source of truth)
 
 ```sql
 CREATE TABLE ticket (
