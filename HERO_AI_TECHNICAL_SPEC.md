@@ -356,7 +356,7 @@ The **per-claim rate** is what's persisted and evaluated (DEC-6), never an answe
 `calibrated_confidence = Calibrator.calibrate(grounding_rate, trade)` — the only confidence
 number that ever leaves the system (INV-4).
 
-## 9. Safety Gate `[SPEC]` — `src/hero/safety/`
+## 9. Safety Gate `[IMPL: src/hero/safety/gate.py, src/hero/safety/hazards.py]` — `src/hero/safety/`
 
 Pure deterministic functions. **No LLM calls in this module.**
 

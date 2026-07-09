@@ -1,11 +1,14 @@
 """TicketState — single typed state object per spec §4.
 
 Nodes take and return TicketState deltas.
+
+GraphState (TypedDict) is used for LangGraph's StateGraph definition.
+TicketState (Pydantic) is used for validation within nodes.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -91,3 +94,28 @@ class TicketState(BaseModel):
     # RESOLVE / PROCURE
     work_order_id: str | None = None
     sku: str | None = None
+
+
+class GraphState(TypedDict, total=False):
+    """TypedDict version of TicketState for LangGraph's StateGraph.
+
+    LangGraph uses TypedDict annotations to track/merge state across nodes.
+    """
+
+    ticket_id: str
+    description: str
+    media: list[dict[str, object]]
+    sensor_readings: list[dict[str, object]]
+    urgency: str | None
+    trade: str | None
+    complexity: str | None
+    evidence: list[dict[str, object]]
+    corrective_rounds: int
+    clarify_rounds: int
+    pending_question: str | None
+    hypotheses: list[dict[str, object]]
+    verify_pass: bool | None
+    escalated: bool
+    escalation_reason: str | None
+    work_order_id: str | None
+    sku: str | None
