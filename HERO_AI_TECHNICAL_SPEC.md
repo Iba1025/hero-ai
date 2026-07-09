@@ -32,7 +32,7 @@
 | Layer | Choice | Pin / Notes |
 |---|---|---|
 | Language | Python 3.12 | `uv` for env + lockfile |
-| Orchestration | `langgraph` (standalone) | Pin exact version in `pyproject.toml`; do NOT add `langchain` meta-packages (DEC-1). Allowed: `langgraph`, `langgraph-checkpoint-postgres` |
+| Orchestration | `langgraph` (standalone) | Pin exact version in `pyproject.toml`; do NOT add `langchain` meta-packages (DEC-1). Allowed: `langgraph`, `langgraph-checkpoint-postgres`, `psycopg[binary]` (runtime dep of checkpoint-postgres) |
 | API | FastAPI + `uvicorn` | Async throughout |
 | DB | Postgres 16 | `asyncpg` + SQLAlchemy 2.x (async), Alembic migrations |
 | Vectors | Qdrant ≥1.10 | Native multivector (MaxSim) collections (DEC-3) |
@@ -128,7 +128,7 @@ detectable (INV-2). Add a `region_guard()` check in app startup.
 
 ---
 
-## 4. Graph State `[IMPL: src/hero/graph/state.py]`
+## 4. Graph State `[IMPL: src/hero/graph/state.py]` (DEC-17: TicketState Pydantic + GraphState TypedDict)
 
 `src/hero/graph/state.py`. Single typed state object; nodes take and return `TicketState` deltas.
 

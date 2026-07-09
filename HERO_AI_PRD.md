@@ -283,6 +283,7 @@ large labeled multi-trade dataset → fine-tuning (DEC-15) and time-series work 
 | DEC-14 | 2026-07 | Adopt conformal prediction sets at SAFETY_GATE (BL-10) | Distribution-free coverage guarantee; escalate on non-singleton/hazard sets; monitor under distribution shift |
 | DEC-15 | 2026-07 | **DEFER** domain fine-tuning until ContractorStatement in the thousands | Cold-start; "LightLLM4FDD 99.8%" claim debunked (real source: GPT-3.5 on clean single-AHU benchmarks) |
 | DEC-16 | 2026-07 | **REJECT** raw BMS time-series text serialization | Fails on long sequences; if ever needed, specialized TS encoder → summary; INV-7 holds |
+| DEC-17 | 2026-07 | Dual state representation: `TicketState` (Pydantic) + `GraphState` (TypedDict) | LangGraph's `StateGraph` requires a TypedDict (or `dataclass`/`dict`) to define the state schema for channel-based merging — it does not accept Pydantic `BaseModel`. The spec §4 `TicketState` (Pydantic) is retained for validation inside nodes (e.g. `diagnose` constructs it to validate inputs). `GraphState` (TypedDict) mirrors it field-for-field and is used only as the `StateGraph` type parameter. Both live in `src/hero/graph/state.py`. |
 
 ---
 
