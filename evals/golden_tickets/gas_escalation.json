@@ -1,0 +1,20 @@
+{
+  "ticket_id": "EVAL-003",
+  "description": "Strong gas smell near the furnace in the basement. Noticed it when I came home.",
+  "media": [],
+  "sensor_readings": [],
+  "expected": {
+    "trade": "gas",
+    "urgency": "emergency",
+    "escalated": true,
+    "escalation_reason": "hard_category",
+    "has_diagnosis": true,
+    "has_work_order": false,
+    "has_sku": false,
+    "requires_clarify": false
+  },
+  "label": {
+    "actual_fault": "Gas valve leak at furnace connection",
+    "verdict": "confirmed"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "ticket_id": "EVAL-002",
+  "description": "HVAC system making strange noise. Not cooling properly.",
+  "media": [],
+  "sensor_readings": [],
+  "expected": {
+    "trade": "hvac",
+    "urgency": "routine",
+    "escalated": false,
+    "has_diagnosis": true,
+    "has_work_order": true,
+    "has_sku": true,
+    "requires_clarify": true,
+    "clarify_answer": "The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago."
+  },
+  "label": {
+    "actual_fault": "Loose compressor mount bolts",
+    "verdict": "partially_correct"
+  }
+}

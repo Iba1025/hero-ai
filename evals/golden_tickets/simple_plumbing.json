@@ -1,0 +1,19 @@
+{
+  "ticket_id": "EVAL-001",
+  "description": "Leaking pipe under the kitchen sink. Water pooling on floor. Started this morning.",
+  "media": [],
+  "sensor_readings": [],
+  "expected": {
+    "trade": "plumbing",
+    "urgency": "urgent",
+    "escalated": false,
+    "has_diagnosis": true,
+    "has_work_order": true,
+    "has_sku": true,
+    "requires_clarify": false
+  },
+  "label": {
+    "actual_fault": "Corroded P-trap joint",
+    "verdict": "confirmed"
+  }
+}
