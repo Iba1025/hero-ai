@@ -12,7 +12,6 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from hero.graph.nodes.clarify import clarify
-from hero.graph.state import GraphState
 from hero.graph.nodes.diagnose import make_diagnose
 from hero.graph.nodes.intake import intake
 from hero.graph.nodes.outcome import outcome
@@ -22,6 +21,7 @@ from hero.graph.nodes.retrieve import make_retrieve
 from hero.graph.nodes.safety_gate import safety_gate
 from hero.graph.nodes.triage import make_triage
 from hero.graph.nodes.verify import make_verify
+from hero.graph.state import GraphState
 from hero.interfaces.calibrator import Calibrator
 from hero.interfaces.catalog import CatalogResolver
 from hero.interfaces.embedder import Embedder

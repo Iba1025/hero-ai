@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.x"
+      - run: uv sync --all-extras
+      - run: uv run ruff check src/ tests/ evals/
+      - run: uv run ruff format --check src/ tests/ evals/
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.x"
+      - run: uv sync --all-extras
+      - run: uv run mypy src/
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hero
+          POSTGRES_PASSWORD: hero
+          POSTGRES_DB: hero
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hero"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://hero:hero@localhost:5432/hero
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.x"
+      - run: uv sync --all-extras
+      - name: Run all tests including invariants
+        run: uv run pytest tests/ -v --tb=short
+
+  invariants:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hero
+          POSTGRES_PASSWORD: hero
+          POSTGRES_DB: hero
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hero"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://hero:hero@localhost:5432/hero
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.x"
+      - run: uv sync --all-extras
+      - name: Run invariant tests (failure blocks merge)
+        run: uv run pytest tests/invariants/ -v --tb=short
+
+  evals:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+asyncpg://hero:hero@localhost:5432/hero
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.x"
+      - run: uv sync --all-extras
+      - name: Run eval scaffold
+        run: uv run python evals/run_eval.py
