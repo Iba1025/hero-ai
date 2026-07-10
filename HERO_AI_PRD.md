@@ -74,9 +74,9 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 |---|---|---|
 | `INTAKE` | Ticket + media ingestion | Presigned upload client-side; state receives pointers. Sensor/BMS data, if available, attaches here as **optional** evidence (INV-7) |
 | `TRIAGE` | Urgency + trade + complexity classification | 🔄 Complexity routing (BL-4) |
-| `RETRIEVE` | Hybrid retrieval over manual corpus | 🔄 Missing reranker (BL-1); 🔄 corrective loop (BL-9) |
+| `RETRIEVE` | Hybrid retrieval over manual corpus | ✅ Reranker landed (BL-1); 🔄 corrective loop (BL-9) |
 | `CLARIFY` | HITL follow-up question, loop to RETRIEVE | Graph pauses here; checkpointer makes it resumable |
-| `DIAGNOSE` | VLM forms fault hypotheses | Claude Sonnet primary, GPT-4o fallback, via LiteLLM |
+| `DIAGNOSE` | VLM forms fault hypotheses | Tiered via LiteLLM (DEC-18): claude-fable-5 primary, claude-sonnet-4-6 verify tier, gpt-4o fallback |
 | `VERIFY` | Ground each claim against evidence | 🔄 Claim-level checks (BL-6 / DEC-6) |
 | `SAFETY_GATE` | Hard escalation check | INV-1. Category-based, confidence-independent. 🔄 Conformal prediction sets (BL-10) |
 | `RESOLVE` | Fix recommendation + work order | |
@@ -108,9 +108,9 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
   "the right starting point") but a generation old. Candidates: **ColQwen3-4B** (ViDoRe SOTA) vs
   **ColModernVBERT** (250M params, within ~0.6 NDCG@5, ~28× smaller → cheaper ingestion,
   CPU-viable). Benchmark on our actual manual pages (BL-5). Embedder is a swappable interface.
-- 🔄 **Missing: cross-encoder reranker** (BL-1). Hybrid top-50 → rerank → top-5. Both reviews
-  independently rank this the single highest-ROI retrieval change. **Self-hosted**
-  (bge/ms-marco-class) preferred over Cohere Rerank API for residency (INV-2, DEC-8).
+- ✅ **Cross-encoder reranker landed** (BL-1, 2026-07). Hybrid top-50 → rerank → top-5. Both reviews
+  independently ranked this the single highest-ROI retrieval change. **Self-hosted**
+  bge-reranker-v2-m3 (`adapters/bge_reranker.py`); Cohere Rerank API excluded for residency (INV-2, DEC-8).
 - 🔄 **Corrective retrieval loop (CRAG-style)** (BL-9 / DEC-11): a lightweight evaluator grades
   whether retrieved manual pages actually support diagnosis before DIAGNOSE; re-retrieve /
   rewrite query if insufficient. Capped iterations + latency timeout, fall back to one-shot.
@@ -173,8 +173,8 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 | ID | Item | Effort | Why |
 |---|---|---|---|
 | **BL-0** | Instrument `OUTCOME` label capture: near-zero-friction contractor confirm/correct UX; label velocity as tracked metric | ongoing | The moat. Everything else is replicable. |
-| **BL-1** | Cross-encoder reranker, self-hosted, in knowledge plane (top-50 → top-5) | days | Highest-ROI retrieval change (both reviews agree) |
-| **BL-2** | Platt/temperature calibration default; isotonic gated ≥1K labels (DEC-5) | hours | Current default statistically invalid at our volume |
+| **BL-1** | ✅ 2026-07: BGE cross-encoder reranker (`adapters/bge_reranker.py`), wired into full path; Cohere adapter stubbed behind config flag (DEC-8). Hit-rate@5 lift demo pending `--live` eval run | days | Highest-ROI retrieval change (both reviews agree) |
+| **BL-2** | ✅ 2026-07: `PlattCalibrator` default (`adapters/platt.py`); `IsotonicCalibrator` self-gated ≥1K labels (DEC-5); ECE reported per eval run | hours | Current default statistically invalid at our volume |
 | **BL-3** | Eval pipeline: golden tickets + retrieval metrics (recall@k, nDCG@5) + LLM-as-judge grounding, CI-gated | ~1 wk | Can't improve what isn't measured; prereq for BL-5/BL-9 |
 | **BL-4** | Complexity routing in TRIAGE (fast path / full path) | ~1 wk | 3–10× token, 2–5× latency cost of full path; unit economics |
 | **BL-9** | Corrective retrieval loop: grade evidence, re-retrieve before DIAGNOSE, capped + timeout (DEC-11) | ~1 wk | Double-digit gains on hard queries; needs BL-3 to measure |

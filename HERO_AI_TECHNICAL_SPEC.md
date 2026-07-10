@@ -121,7 +121,8 @@ DATABASE_URL                # postgres, ca-central instance
 QDRANT_URL / QDRANT_API_KEY
 R2_ENDPOINT / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY   # bucket region: ca
 LANGFUSE_HOST / LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY           # self-hosted
-LITELLM_*                   # provider keys; primary=claude-sonnet, fallback=gpt-4o
+VLM_MODEL_PRIMARY / VLM_MODEL_VERIFY / VLM_MODEL_FALLBACK   # DEC-18 tiers (fable-5 / sonnet-4-6 / gpt-4o)
+ANTHROPIC_API_KEY / OPENAI_API_KEY                          # provider keys (LiteLLM)
 EMBEDDER_IMPL               # "colmodernvbert" | "colqwen3"  (DEC-2 bake-off switch)
 RERANKER_IMPL               # "bge" | "cohere"
 CALIBRATOR_IMPL             # "platt" (default; "isotonic" gated behind label count ≥1000, DEC-5)
@@ -327,7 +328,7 @@ class CatalogResolver(Protocol):
 
 ---
 
-## 7. Retrieval Pipeline `[SPEC]` — `src/hero/retrieval/`
+## 7. Retrieval Pipeline `[IMPL: src/hero/retrieval/hybrid.py, src/hero/ingestion/, src/hero/graph/nodes/retrieve.py]` — `src/hero/retrieval/`
 
 ```
 query → [dense: Qdrant MaxSim multivector, top 25] ┐
@@ -350,12 +351,16 @@ query → [BM25 index, top 25]                        ┘
   quantization + on-disk storage once corpus exceeds ~50K pages. Validate <1% nDCG@5 delta in
   the BL-3 eval before enabling in prod.
 
-## 8. Verification `[SPEC]` — `src/hero/verification/`
+## 8. Verification `[IMPL: src/hero/graph/nodes/verify.py, src/hero/adapters/platt.py]` — `src/hero/verification/`
 
 Per hypothesis: `VLM.decompose_claims` → for each claim, gather top evidence text →
 `VLM.check_entailment(claim, evidence)` → `Claim.grounded`.
 `verify_pass = (grounded_claims / total_claims) >= GROUNDING_THRESHOLD` (config, default 1.0
 for part numbers / model codes claims; 0.8 for descriptive claims — claim classifier decides).
+**Claim classifier + per-claim-type thresholds are BL-6 (DEC-6) `[SPEC]`** — current impl applies
+the single `GROUNDING_THRESHOLD` and passes stub evidence text; real evidence-text wiring lands
+with BL-6. Calibrators (DEC-5): `PlattCalibrator` default, `IsotonicCalibrator` self-gated ≥1000
+labels, binned ECE reported per eval run (BL-2 ✅).
 The **per-claim rate** is what's persisted and evaluated (DEC-6), never an answer-level average alone.
 `calibrated_confidence = Calibrator.calibrate(grounding_rate, trade)` — the only confidence
 number that ever leaves the system (INV-4).
