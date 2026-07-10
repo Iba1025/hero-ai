@@ -1,0 +1,88 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 6 0 R 9 0 R] /Count 3 >>
+endobj
+
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+
+4 0 obj
+<< /Length 245 >>
+stream
+BT /F1 12 Tf 72 720 Td
+(ACME Plumbing Manual - Model PL-2000
+Chapter 1: P-Trap Installation
+Part Number: PT-100-SS
+The P-trap connects the drain outlet to the wall pipe.
+Ensure proper alignment before tightening compression nuts.) Tj 0 -20 Td
+ET
+endstream
+endobj
+
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 8 0 R >> >> >>
+endobj
+
+7 0 obj
+<< /Length 234 >>
+stream
+BT /F1 12 Tf 72 720 Td
+(Chapter 2: Faucet Cartridge Replacement
+Part Number: FC-200-BR
+Remove the handle screw and pull the cartridge straight out.
+Replace with OEM cartridge FC-200-BR. Apply plumber grease to O-rings.) Tj 0 -20 Td
+ET
+endstream
+endobj
+
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 10 0 R /Resources << /Font << /F1 11 0 R >> >> >>
+endobj
+
+10 0 obj
+<< /Length 222 >>
+stream
+BT /F1 12 Tf 72 720 Td
+(Chapter 3: Troubleshooting
+Leaking under sink: Check P-trap connections PT-100-SS.
+Low water pressure: Inspect aerator and supply valve.
+Dripping faucet: Replace cartridge FC-200-BR.) Tj 0 -20 Td
+ET
+endstream
+endobj
+
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000059 00000 n 
+0000000129 00000 n 
+0000000256 00000 n 
+0000000553 00000 n 
+0000000624 00000 n 
+0000000751 00000 n 
+0000001037 00000 n 
+0000001108 00000 n 
+0000001237 00000 n 
+0000001512 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+1584
+%%EOF
