@@ -72,14 +72,17 @@ def build_graph(
     catalog: CatalogResolver,
     checkpointer: BaseCheckpointSaver[Any],
     grounding_threshold: float = 0.8,
+    qdrant_client: Any | None = None,
 ) -> Any:
     """Assemble the full ticket pipeline graph.
 
     Returns a compiled LangGraph with PostgresSaver checkpointer (INV-6).
+    If qdrant_client is provided, RETRIEVE uses real hybrid retrieval;
+    otherwise, it produces stub evidence.
     """
     # Create node functions with injected adapters
     triage_fn = make_triage(vlm)
-    retrieve_fn = make_retrieve(embedder, reranker)
+    retrieve_fn = make_retrieve(embedder, reranker, qdrant_client=qdrant_client)
     diagnose_fn = make_diagnose(vlm)
     verify_fn = make_verify(vlm, calibrator, grounding_threshold)
     procure_fn = make_procure(catalog)
