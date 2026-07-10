@@ -42,6 +42,10 @@
 | Reranker | Cross-encoder behind `Reranker` Protocol | BL-1; start with `BAAI/bge-reranker-v2-m3` local, keep Cohere Rerank as config option |
 | Observability | Langfuse (self-hosted, ca-central) | `langfuse` SDK; trace every graph run |
 | Tests | pytest + pytest-asyncio | `testcontainers` for Postgres/Qdrant |
+| Embedder runtime | `colpali-engine==0.3.17`, `torch==2.11.0`, `transformers==5.13.0`, `Pillow==12.3.0` | ColPali-family multivector embeddings (DEC-2) |
+| Reranker runtime | `sentence-transformers==5.6.0` | BGE cross-encoder (BL-1, DEC-8) |
+| Ingestion | `pypdfium2==5.11.0` | PDF → page images; no Poppler system dep |
+| Calibration | `scikit-learn==1.9.0` | Platt/isotonic scaling (DEC-5) |
 | Lint/format | ruff (lint+format), mypy --strict | CI-blocking |
 
 ---
