@@ -49,6 +49,7 @@ class EvidenceChunk(BaseModel):
     region: dict[str, object] | None = None  # bbox; BL-7, nullable until then
     score: float  # post-rerank score
     retrieval_stage: Literal["dense", "bm25", "fused", "reranked"]
+    text: str | None = None  # page text from Qdrant payload — reranker/VERIFY input
 
 
 class Claim(BaseModel):

@@ -92,6 +92,7 @@ def retrieve_dense(
                 page=int(payload.get("page", 0)),
                 score=float(point.score) if point.score else 0.0,
                 retrieval_stage="dense",
+                text=payload.get("text"),
             )
         )
     return chunks
@@ -121,6 +122,7 @@ def retrieve_bm25(
                 page=int(payload.get("page", 0)),
                 score=float(point.score) if point.score else 0.0,
                 retrieval_stage="bm25",
+                text=payload.get("text"),
             )
         )
     return chunks

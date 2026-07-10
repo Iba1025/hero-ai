@@ -24,11 +24,11 @@ class ColModernVBertEmbedder:
     and queries, compatible with Qdrant MaxSim multivector collections.
     """
 
-    model_id: str = "vidore/colmodernbert-2b-v1"
+    model_id: str = "ModernVBERT/colmodernvbert"
 
     def __init__(
         self,
-        model_name: str = "vidore/colmodernbert-2b-v1",
+        model_name: str = "ModernVBERT/colmodernvbert",
         device: str | None = None,
     ) -> None:
         self.model_id = model_name

@@ -39,9 +39,20 @@ class EmbedderContractSuite:
         assert isinstance(embedder.model_id, str)
         assert len(embedder.model_id) > 0
 
+    @staticmethod
+    def _page_image_bytes() -> bytes:
+        """A valid minimal PNG — real embedders decode it, stubs ignore content."""
+        import io
+
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), "white").save(buf, format="PNG")
+        return buf.getvalue()
+
     def test_embed_page_returns_multi_vector(self) -> None:
         embedder = self.get_embedder()
-        result = embedder.embed_page(b"fake-image-bytes")
+        result = embedder.embed_page(self._page_image_bytes())
         assert isinstance(result, list)
         assert len(result) >= 1
         assert isinstance(result[0], list)

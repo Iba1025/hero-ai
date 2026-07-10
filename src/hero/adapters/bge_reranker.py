@@ -36,13 +36,12 @@ class BGEReranker:
         if not candidates:
             return []
 
-        # Build (query, doc_text) pairs
-        # Use doc_id:page as fallback text if no text payload available
+        # Build (query, doc_text) pairs from the page text carried on the chunk
+        # (Qdrant payload). Metadata string is a last-resort fallback so the
+        # adapter never crashes on text-less chunks — a real rerank needs text.
         pairs: list[list[str]] = []
         for c in candidates:
-            # In a real system, we'd fetch the text from Qdrant payload
-            # For now, use the chunk metadata as proxy
-            doc_text = f"Document {c.doc_id}, page {c.page}"
+            doc_text = c.text or f"Document {c.doc_id}, page {c.page}"
             pairs.append([query, doc_text])
 
         # Score all pairs
