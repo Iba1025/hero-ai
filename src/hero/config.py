@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──
     embedder_impl: Literal["colmodernvbert", "colqwen3", "stub"] = Field(default="stub")
     reranker_impl: Literal["bge", "cohere", "stub"] = Field(default="stub")
-    calibrator_impl: Literal["platt", "isotonic", "stub"] = Field(default="stub")
+    calibrator_impl: Literal["platt", "isotonic", "stub"] = Field(default="platt")
 
     # ── Retrieval tuning ─────────────────────────────────────────────────
     grounding_threshold: float = Field(default=0.8)

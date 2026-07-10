@@ -27,7 +27,7 @@ from typing import Any
 
 from langgraph.types import Command
 
-from hero.adapters.stub_calibrator import StubCalibrator
+from hero.adapters.platt import PlattCalibrator, expected_calibration_error
 from hero.adapters.stub_catalog import StubCatalogResolver
 from hero.adapters.stub_embedder import StubEmbedder
 from hero.adapters.stub_reranker import StubReranker
@@ -74,11 +74,15 @@ async def _make_checkpointer() -> Any:
 
 
 def _build_graph(checkpointer: Any) -> Any:
-    """Build graph with stub adapters and the given checkpointer."""
+    """Build graph with stub adapters and the given checkpointer.
+
+    Calibrator is the real PlattCalibrator (BL-2 default, DEC-5). Unfitted it
+    is identity — same behavior as the stub until labels accumulate.
+    """
     return build_graph(
         embedder=StubEmbedder(),
         reranker=StubReranker(),
-        calibrator=StubCalibrator(),
+        calibrator=PlattCalibrator(),
         vlm=StubVLM(),
         catalog=StubCatalogResolver(),
         checkpointer=checkpointer,
@@ -189,7 +193,6 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
     evidence = result.get("evidence", [])
     checks["retrieval_count"] = len(evidence)
     checks["retrieval_hit_rate_at_5"] = min(len(evidence), 5) / 5.0 if evidence else 0.0
-    checks["ece"] = 0.0
     checks["cost_usd"] = 0.0
     checks["latency_s"] = run_result["elapsed_s"]
 
@@ -256,6 +259,23 @@ async def main() -> int:
     avg_grounding = [r["grounding_rate"] for r in all_results if r["grounding_rate"] is not None]
     if avg_grounding:
         print(f"Avg grounding rate: {sum(avg_grounding) / len(avg_grounding):.2f}")
+
+    # ECE (BL-2): run-level metric over (grounding_rate, correct) pairs.
+    # With the small golden set this is a scaffold — the number becomes
+    # meaningful as ContractorStatement labels accumulate (BL-0 flywheel).
+    pairs = [
+        (r["grounding_rate"], bool(r["pass"]))
+        for r in all_results
+        if r["grounding_rate"] is not None
+    ]
+    if pairs:
+        raw_ece = expected_calibration_error([p for p, _ in pairs], [y for _, y in pairs])
+        print(f"ECE (uncalibrated grounding rate): {raw_ece:.4f} over {len(pairs)} tickets")
+        eval_calibrator = PlattCalibrator()
+        eval_calibrator.fit(pairs)  # skips (identity) if labels are one-class
+        print(f"ECE (PlattCalibrator post-fit):    {eval_calibrator.ece():.4f}")
+    else:
+        print("ECE: no (grounding_rate, outcome) pairs available")
     print(f"{'=' * 70}\n")
 
     return 0 if all_pass else 1

@@ -150,6 +150,24 @@ class TestStubCalibrator(CalibratorContractSuite):
         return StubCalibrator()
 
 
+class TestPlattCalibrator(CalibratorContractSuite):
+    """Real Platt adapter (BL-2) — same contract as stub. sklearn only, no downloads."""
+
+    def get_calibrator(self) -> Calibrator:
+        from hero.adapters.platt import PlattCalibrator
+
+        return PlattCalibrator()
+
+
+class TestIsotonicCalibrator(CalibratorContractSuite):
+    """Isotonic adapter (DEC-5 gated) — same contract as stub."""
+
+    def get_calibrator(self) -> Calibrator:
+        from hero.adapters.platt import IsotonicCalibrator
+
+        return IsotonicCalibrator()
+
+
 # ---------------------------------------------------------------------------
 # VLM contract
 # ---------------------------------------------------------------------------

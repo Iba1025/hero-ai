@@ -15,6 +15,7 @@ from hero.adapters.stub_reranker import StubReranker
 from hero.adapters.stub_vlm import StubVLM
 from hero.config import Settings, get_settings
 from hero.graph.build import build_graph
+from hero.interfaces.calibrator import Calibrator
 
 
 @lru_cache(maxsize=1)
@@ -33,6 +34,23 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     factory = _get_session_factory(settings.database_url)
     async with factory() as session:
         yield session
+
+
+def make_calibrator(settings: Settings) -> Calibrator:
+    """Select calibrator by CALIBRATOR_IMPL (DEC-5: platt default).
+
+    Isotonic is selectable but self-gates: it stays in identity mode until
+    fit with >= 1000 labels (see adapters/platt.py).
+    """
+    if settings.calibrator_impl == "platt":
+        from hero.adapters.platt import PlattCalibrator
+
+        return PlattCalibrator()
+    if settings.calibrator_impl == "isotonic":
+        from hero.adapters.platt import IsotonicCalibrator
+
+        return IsotonicCalibrator()
+    return StubCalibrator()
 
 
 async def make_checkpointer(settings: Settings) -> Any:
@@ -71,7 +89,7 @@ async def get_graph() -> Any:
     return build_graph(
         embedder=StubEmbedder(),
         reranker=StubReranker(),
-        calibrator=StubCalibrator(),
+        calibrator=make_calibrator(settings),
         vlm=StubVLM(),
         catalog=StubCatalogResolver(),
         checkpointer=checkpointer,
