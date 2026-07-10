@@ -33,7 +33,7 @@ dependencies = [
 dev = [
     "pytest==8.4.1",
     "pytest-asyncio==1.4.0",
-    "testcontainers[postgres]==4.14.2",
+    "testcontainers[postgres,qdrant]==4.14.2",
     "aiosqlite==0.21.0",  # async SQLite for flywheel tests without Docker
     "ruff==0.11.12",
     "mypy==1.16.0",
