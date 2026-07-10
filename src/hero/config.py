@@ -61,9 +61,19 @@ class Settings(BaseSettings):
     langfuse_public_key: str = Field(default="")
     langfuse_secret_key: str = Field(default="")
 
-    # ── LiteLLM / provider keys ──────────────────────────────────────────
-    litellm_primary_model: str = Field(default="claude-sonnet-4-20250514")
-    litellm_fallback_model: str = Field(default="gpt-4o")
+    # ── LiteLLM / VLM tiered routing (DEC-18) ──────────────────────────
+    vlm_model_primary: str = Field(
+        default="claude-fable-5",
+        description="Frontier model for DIAGNOSE/TRIAGE (reasoning-heavy)",
+    )
+    vlm_model_verify: str = Field(
+        default="claude-sonnet-4-6",
+        description="Cheaper model for decompose_claims/check_entailment (high-volume)",
+    )
+    vlm_model_fallback: str = Field(
+        default="gpt-4o",
+        description="Cross-provider fallback for both tiers",
+    )
     anthropic_api_key: str = Field(default="")
     openai_api_key: str = Field(default="")
 

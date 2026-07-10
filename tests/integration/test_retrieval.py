@@ -37,7 +37,7 @@ def _print_chunks(label: str, chunks: list) -> None:  # type: ignore[type-arg]
     print(f"\n  [{label}] {len(chunks)} results:")
     for i, c in enumerate(chunks):
         print(
-            f"    #{i+1}: doc_id={c.doc_id} page={c.page}"
+            f"    #{i + 1}: doc_id={c.doc_id} page={c.page}"
             f" score={c.score:.6f} stage={c.retrieval_stage}"
         )
 

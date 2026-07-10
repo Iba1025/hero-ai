@@ -37,7 +37,7 @@
 | DB | Postgres 16 | `asyncpg` + SQLAlchemy 2.x (async), Alembic migrations |
 | Vectors | Qdrant ≥1.10 | Native multivector (MaxSim) collections (DEC-3) |
 | Object storage | Cloudflare R2 (S3 API) | `ca` jurisdiction; `boto3` presigning only server-side |
-| LLM routing | LiteLLM | Claude Sonnet primary, GPT-4o fallback |
+| LLM routing | LiteLLM | Tiered: `claude-fable-5` primary (DIAGNOSE/TRIAGE), `claude-sonnet-4-6` verify (claims/entailment), `gpt-4o` cross-provider fallback. Config: `VLM_MODEL_PRIMARY`, `VLM_MODEL_VERIFY`, `VLM_MODEL_FALLBACK` (DEC-18) |
 | Embedder | ColPali-family behind `Embedder` Protocol | Bake-off pending (DEC-2 / BL-5); default dev model: ColModernVBERT (small, CPU-viable) |
 | Reranker | Cross-encoder behind `Reranker` Protocol | BL-1; start with `BAAI/bge-reranker-v2-m3` local, keep Cohere Rerank as config option |
 | Observability | Langfuse (self-hosted, ca-central) | `langfuse` SDK; trace every graph run |

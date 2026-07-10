@@ -284,6 +284,7 @@ large labeled multi-trade dataset → fine-tuning (DEC-15) and time-series work 
 | DEC-15 | 2026-07 | **DEFER** domain fine-tuning until ContractorStatement in the thousands | Cold-start; "LightLLM4FDD 99.8%" claim debunked (real source: GPT-3.5 on clean single-AHU benchmarks) |
 | DEC-16 | 2026-07 | **REJECT** raw BMS time-series text serialization | Fails on long sequences; if ever needed, specialized TS encoder → summary; INV-7 holds |
 | DEC-17 | 2026-07 | Dual state representation: `TicketState` (Pydantic) + `GraphState` (TypedDict) | LangGraph's `StateGraph` requires a TypedDict (or `dataclass`/`dict`) to define the state schema for channel-based merging — it does not accept Pydantic `BaseModel`. The spec §4 `TicketState` (Pydantic) is retained for validation inside nodes (e.g. `diagnose` constructs it to validate inputs). `GraphState` (TypedDict) mirrors it field-for-field and is used only as the `StateGraph` type parameter. Both live in `src/hero/graph/state.py`. |
+| DEC-18 | 2026-07 | Tiered VLM routing: `claude-fable-5` primary (DIAGNOSE/TRIAGE), `claude-sonnet-4-6` verify (decompose_claims/check_entailment), `gpt-4o` cross-provider fallback (both tiers). All three model IDs are config — never hard-coded in the adapter. | Reasoning-heavy calls (diagnosis, triage) need a frontier model; verification calls are high-volume, low-complexity — cheaper tier. Cross-provider fallback ensures availability. |
 
 ---
 
