@@ -1,23 +1,32 @@
-"""Eval harness — replays golden tickets through the graph with stub adapters.
+"""Eval harness — replays golden tickets through the graph.
 
 Reports metrics per spec §10.2:
-- retrieval hit-rate@5
+- retrieval hit-rate@5 (against expected_evidence annotations)
 - per-claim grounding rate
 - diagnosis accuracy vs label
 - ECE
 - cost/ticket (stub: $0)
 - latency
 
+Adapter modes:
+- default (CI): stub adapters — no API keys, no model downloads, no Qdrant.
+- --live (local only): LiteLLMVLM (DEC-18 tiers) + ColModernVBERT embedder +
+  BGE reranker + real Qdrant. Requires API keys, model downloads, and an
+  ingested Qdrant instance. NEVER run in CI.
+
 Checkpointer: AsyncPostgresSaver by default (INV-6). The eval proves real
 Postgres checkpoint round-trips, including CLARIFY resume across a fresh
 connection. Set HERO_EVAL_MEMORY_CHECKPOINTER=1 for local dev without
 Postgres — CI must never set this flag.
 
-Usage: uv run python evals/run_eval.py
+Usage:
+    uv run python evals/run_eval.py           # stub adapters (CI)
+    uv run python evals/run_eval.py --live    # real adapters (local)
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import sys
@@ -73,23 +82,70 @@ async def _make_checkpointer() -> Any:
     return saver
 
 
-def _build_graph(checkpointer: Any) -> Any:
-    """Build graph with stub adapters and the given checkpointer.
+def _make_adapters(live: bool) -> dict[str, Any]:
+    """Build the adapter set. Stubs by default; real adapters with --live.
 
-    Calibrator is the real PlattCalibrator (BL-2 default, DEC-5). Unfitted it
-    is identity — same behavior as the stub until labels accumulate.
+    Calibrator is always the real PlattCalibrator (BL-2 default, DEC-5).
+    Unfitted it is identity — same behavior as the stub until labels accumulate.
     """
+    if not live:
+        print("[ADAPTERS] stub (VLM=StubVLM, embedder=StubEmbedder, reranker=StubReranker)")
+        return {
+            "embedder": StubEmbedder(),
+            "reranker": StubReranker(),
+            "vlm": StubVLM(),
+            "qdrant_client": None,
+        }
+
+    # --live: real adapters. Local only — needs keys, model downloads, Qdrant.
+    from qdrant_client import QdrantClient
+
+    from hero.adapters.bge_reranker import BGEReranker
+    from hero.adapters.colmodernvbert import ColModernVBertEmbedder
+    from hero.adapters.litellm_vlm import LiteLLMVLM
+
+    settings = get_settings()
+    if not (settings.anthropic_api_key or settings.openai_api_key):
+        raise SystemExit(
+            "--live requires ANTHROPIC_API_KEY and/or OPENAI_API_KEY in the environment/.env"
+        )
+
+    client = QdrantClient(url=settings.qdrant_url, timeout=10)
+    client.get_collections()  # fail loudly if Qdrant unreachable
+
+    print(
+        f"[ADAPTERS] live (VLM=LiteLLMVLM primary={settings.vlm_model_primary} "
+        f"verify={settings.vlm_model_verify} fallback={settings.vlm_model_fallback}, "
+        f"embedder=ColModernVBERT, reranker=BGE, qdrant={settings.qdrant_url})"
+    )
+    return {
+        "embedder": ColModernVBertEmbedder(),
+        "reranker": BGEReranker(),
+        "vlm": LiteLLMVLM(
+            primary_model=settings.vlm_model_primary,
+            verify_model=settings.vlm_model_verify,
+            fallback_model=settings.vlm_model_fallback,
+        ),
+        "qdrant_client": client,
+    }
+
+
+def _build_graph(checkpointer: Any, adapters: dict[str, Any]) -> Any:
+    """Build graph with the given adapter set and checkpointer."""
     return build_graph(
-        embedder=StubEmbedder(),
-        reranker=StubReranker(),
+        embedder=adapters["embedder"],
+        reranker=adapters["reranker"],
         calibrator=PlattCalibrator(),
-        vlm=StubVLM(),
+        vlm=adapters["vlm"],
         catalog=StubCatalogResolver(),
         checkpointer=checkpointer,
+        qdrant_client=adapters["qdrant_client"],
     )
 
 
-async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any]:
+async def run_ticket(
+    checkpointer: Any, ticket: dict[str, Any], adapters: dict[str, Any]
+) -> dict[str, Any]:
     """Run a single golden ticket through the graph, handling CLARIFY if needed.
 
     For CLARIFY tickets: simulates a process restart by destroying the graph
@@ -114,7 +170,7 @@ async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any
     start = time.monotonic()
 
     # --- First graph instance ---
-    graph1 = _build_graph(checkpointer)
+    graph1 = _build_graph(checkpointer, adapters)
     result = await graph1.ainvoke(input_state, config=config)
 
     # If CLARIFY interrupted, simulate process restart
@@ -128,7 +184,7 @@ async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any
         # --- New graph instance, same checkpointer (simulates process restart) ---
         # With AsyncPostgresSaver, the new graph reads state from Postgres.
         print("  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)")
-        graph2 = _build_graph(checkpointer)
+        graph2 = _build_graph(checkpointer, adapters)
 
         # Verify state was persisted
         state = await graph2.aget_state(config)
@@ -149,6 +205,7 @@ async def run_ticket(checkpointer: Any, ticket: dict[str, Any]) -> dict[str, Any
         "result": result,
         "elapsed_s": elapsed,
         "expected": expected,
+        "expected_evidence": ticket.get("expected_evidence"),
         "label": ticket.get("label", {}),
     }
 
@@ -192,7 +249,24 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
 
     evidence = result.get("evidence", [])
     checks["retrieval_count"] = len(evidence)
-    checks["retrieval_hit_rate_at_5"] = min(len(evidence), 5) / 5.0 if evidence else 0.0
+    # Hit-rate@5 (spec §10.2): 1.0 if any annotated gold evidence chunk appears
+    # in the top-5 retrieved. None when the ticket has no expected_evidence
+    # annotation. With stub retrieval this is honestly 0.0 — gold annotations
+    # reference real manual pages, which only --live retrieval can surface.
+    gold = run_result.get("expected_evidence")
+    if gold:
+        top5 = evidence[:5]
+        checks["retrieval_hit_rate_at_5"] = (
+            1.0
+            if any(
+                e.get("doc_id") == g["doc_id"] and e.get("page") in g["pages"]
+                for e in top5
+                for g in gold
+            )
+            else 0.0
+        )
+    else:
+        checks["retrieval_hit_rate_at_5"] = None
     checks["cost_usd"] = 0.0
     checks["latency_s"] = run_result["elapsed_s"]
 
@@ -207,18 +281,28 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
 
 async def main() -> int:
     """Run all golden tickets and print results."""
+    parser = argparse.ArgumentParser(description="Hero.AI golden-ticket eval")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Use real adapters (LiteLLMVLM + ColModernVBERT + BGE + Qdrant). "
+        "Local only — requires API keys, model downloads, ingested Qdrant. Never in CI.",
+    )
+    args = parser.parse_args()
+
     tickets = load_golden_tickets()
     checkpointer = await _make_checkpointer()
+    adapters = _make_adapters(live=args.live)
 
     print(f"\n{'=' * 70}")
-    print(f"Hero.AI Eval — {len(tickets)} golden tickets")
+    print(f"Hero.AI Eval — {len(tickets)} golden tickets (mode={'LIVE' if args.live else 'stub'})")
     print(f"{'=' * 70}\n")
 
     all_results: list[dict[str, Any]] = []
     all_pass = True
 
     for ticket in tickets:
-        run_result = await run_ticket(checkpointer, ticket)
+        run_result = await run_ticket(checkpointer, ticket, adapters)
         checks = evaluate(run_result)
         result = run_result["result"]
         all_results.append({"ticket_id": ticket["ticket_id"], **checks})
@@ -259,6 +343,22 @@ async def main() -> int:
     avg_grounding = [r["grounding_rate"] for r in all_results if r["grounding_rate"] is not None]
     if avg_grounding:
         print(f"Avg grounding rate: {sum(avg_grounding) / len(avg_grounding):.2f}")
+
+    # Hit-rate@5 over annotated tickets only (spec §10.2). Stub retrieval
+    # cannot hit real manual pages — expect 0.00 in stub mode, lift in --live.
+    hits = [
+        r["retrieval_hit_rate_at_5"]
+        for r in all_results
+        if r["retrieval_hit_rate_at_5"] is not None
+    ]
+    if hits:
+        mode = "live" if args.live else "stub"
+        print(
+            f"Retrieval hit-rate@5: {sum(hits) / len(hits):.2f} "
+            f"over {len(hits)} annotated tickets (retrieval={mode})"
+        )
+    else:
+        print("Retrieval hit-rate@5: n/a (no tickets with expected_evidence annotations)")
 
     # ECE (BL-2): run-level metric over (grounding_rate, correct) pairs.
     # With the small golden set this is a scaffold — the number becomes

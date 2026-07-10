@@ -15,5 +15,12 @@
   "label": {
     "actual_fault": "Corroded P-trap joint",
     "verdict": "confirmed"
-  }
+  },
+  "expected_evidence": [
+    {
+      "doc_id": "test-manual",
+      "pages": [0, 2],
+      "note": "P-Trap chapter (p0) and troubleshooting (p2) of tests/fixtures/test_plumbing_manual.pdf — requires --live retrieval with the fixture ingested"
+    }
+  ]
 }
