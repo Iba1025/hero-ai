@@ -29,6 +29,18 @@ def _load_prompt(name: str) -> str:
     return (_PROMPTS_DIR / f"{name}.md").read_text()
 
 
+def _render(template: str, **values: str) -> str:
+    """Substitute {key} tokens without str.format().
+
+    Prompt files legitimately contain literal JSON braces (output examples);
+    str.format() raises KeyError on them. Found live 2026-07-10 on the first
+    real diagnose() call — stub runs never render prompts.
+    """
+    for key, value in values.items():
+        template = template.replace("{" + key + "}", value)
+    return template
+
+
 _DIAGNOSE_PROMPT = _load_prompt("diagnose")
 _DECOMPOSE_PROMPT = _load_prompt("decompose_claims")
 _ENTAILMENT_PROMPT = _load_prompt("check_entailment")
@@ -51,18 +63,24 @@ class LiteLLMVLM:
         self._fallback = fallback_model
 
     async def _call(self, model: str, prompt: str, tier: str) -> str:
-        """Call LiteLLM with fallback. Logs model and tier."""
+        """Call LiteLLM with fallback. Logs model and tier.
+
+        No `temperature` param: newer Anthropic models reject it
+        ("`temperature` is deprecated for this model") — found live 2026-07-10.
+        Model IDs are config-driven (DEC-18), so we omit it for all tiers
+        rather than special-casing model names.
+        """
         try:
             logger.info("[VLM] tier=%s model=%s", tier, model)
             response = await litellm.acompletion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
                 response_format={"type": "json_object"},
                 fallbacks=[self._fallback],
             )
             content: str = response.choices[0].message.content or ""
             logger.info("[VLM] tier=%s model=%s served_by=%s", tier, model, response.model)
+            self._log_cost(response, tier)
             return content
         except Exception:
             logger.warning(
@@ -74,12 +92,28 @@ class LiteLLMVLM:
             response = await litellm.acompletion(
                 model=self._fallback,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
                 response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or ""
             logger.info("[VLM] tier=%s served_by=%s (fallback)", tier, self._fallback)
+            self._log_cost(response, tier)
             return content
+
+    @staticmethod
+    def _log_cost(response: object, tier: str) -> None:
+        """Log LiteLLM-computed cost + token usage per call (baseline metrics)."""
+        try:
+            cost = getattr(response, "_hidden_params", {}).get("response_cost")
+            usage = getattr(response, "usage", None)
+            logger.info(
+                "[VLM-COST] tier=%s cost_usd=%s prompt_tokens=%s completion_tokens=%s",
+                tier,
+                cost,
+                getattr(usage, "prompt_tokens", None),
+                getattr(usage, "completion_tokens", None),
+            )
+        except Exception:  # never let metrics logging break a call
+            logger.debug("[VLM-COST] tier=%s cost unavailable", tier)
 
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:
         """Form fault hypotheses — uses PRIMARY model (reasoning-heavy)."""
@@ -87,7 +121,8 @@ class LiteLLMVLM:
             f"[{e.doc_id} p{e.page}] (score={e.score:.2f})" for e in state.evidence
         )
 
-        prompt = _DIAGNOSE_PROMPT.format(
+        prompt = _render(
+            _DIAGNOSE_PROMPT,
             description=state.description,
             trade=state.trade or "unknown",
             evidence=evidence_text or "No evidence available",
@@ -123,7 +158,7 @@ class LiteLLMVLM:
 
     async def decompose_claims(self, hypothesis_text: str) -> list[str]:
         """Break hypothesis into verifiable claims — uses VERIFY model (cheaper)."""
-        prompt = _DECOMPOSE_PROMPT.format(hypothesis_text=hypothesis_text)
+        prompt = _render(_DECOMPOSE_PROMPT, hypothesis_text=hypothesis_text)
         raw = await self._call(self._verify, prompt, "verify/decompose")
 
         try:
@@ -139,7 +174,7 @@ class LiteLLMVLM:
 
     async def check_entailment(self, claim: str, evidence_text: str) -> bool:
         """Check if evidence entails claim — uses VERIFY model (cheaper)."""
-        prompt = _ENTAILMENT_PROMPT.format(claim=claim, evidence_text=evidence_text)
+        prompt = _render(_ENTAILMENT_PROMPT, claim=claim, evidence_text=evidence_text)
         raw = await self._call(self._verify, prompt, "verify/entailment")
 
         try:
