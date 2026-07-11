@@ -326,7 +326,7 @@ async def run_ticket(
     }
 
 
-def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
+def evaluate(run_result: dict[str, Any], *, live: bool = False) -> dict[str, Any]:
     """Evaluate a single run against expected outcomes."""
     result = run_result["result"]
     expected = run_result["expected"]
@@ -340,7 +340,10 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
     # node-latency trace — retrieve_fast only exists on the fast path).
     checks["complexity"] = result.get("complexity")
     checks["path"] = "fast" if "retrieve_fast" in run_result.get("node_latency", {}) else "full"
-    if "complexity" in expected:
+    # P4-0: a "complex" pin only gates in --live — StubVLM triage IS the DEC-21
+    # keyword fallback, which never returns "complex" by design. Tracked
+    # (non-gating) via expected_complexity in stub mode regardless.
+    if "complexity" in expected and (live or expected["complexity"] != "complex"):
         checks["complexity_match"] = result.get("complexity") == expected["complexity"]
 
     # P3-4 rider: every golden ticket carries a non-gating expected_complexity
@@ -471,7 +474,7 @@ async def main() -> int:
             print(f"----- run {run_idx + 1}/{args.runs} -----")
         for ticket in tickets:
             run_result = await run_ticket(checkpointer, ticket, adapters, run_idx=run_idx)
-            checks = evaluate(run_result)
+            checks = evaluate(run_result, live=args.live)
             result = run_result["result"]
             all_results.append({"ticket_id": ticket["ticket_id"], "run": run_idx, **checks})
 

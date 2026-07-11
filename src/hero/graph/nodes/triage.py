@@ -1,6 +1,6 @@
 """TRIAGE node — urgency + trade + complexity classification (BL-4).
 
-VLM-backed (primary tier, DEC-18) with deterministic fail-safes:
+VLM-backed (verify tier, DEC-18 as amended) with deterministic fail-safes:
 
 1. Keyword hazard override (INV-1): if the keyword scan detects a
    hard-escalate trade (gas/electrical/structural/water_intrusion) the

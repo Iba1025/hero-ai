@@ -1,0 +1,33 @@
+{
+  "ticket_id": "EVAL-005",
+  "description": "The rooftop AC serving our floor has several problems at once: there is a loud rattling on and off, a couple of rooms barely cool while the others are fine, and twice this week the unit shut itself off completely and took a while to come back on. Not sure if these are related or separate issues.",
+  "media": [],
+  "sensor_readings": [],
+  "expected_complexity": "complex",
+  "expected": {
+    "trade": "hvac",
+    "urgency": "urgent",
+    "complexity": "complex",
+    "escalated": false,
+    "has_diagnosis": true,
+    "has_work_order": true,
+    "has_sku": true,
+    "requires_clarify": true,
+    "clarify_answer": "The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later."
+  },
+  "label": {
+    "actual_fault": "Failing capacitor CP-35-440 causing intermittent shutdowns; clogged filter and loose compressor mounts as secondary faults",
+    "verdict": "partially_correct"
+  },
+  "expected_claims": {
+    "min_grounding_rate": 0.5,
+    "note": "P4-0: genuinely multi-symptom ticket — all three fixture-manual faults are in play (rattling -> CM-450-BK mounts, weak cooling -> AF-16X25 filter, no-start -> CP-35-440 capacitor). Exercises the 'complex' triage vocabulary slot (non-gating expected_complexity) and a CLARIFY round. Grounds against tests/fixtures/test_hvac_manual.pdf in --live."
+  },
+  "expected_evidence": [
+    {
+      "doc_id": "test-hvac-manual",
+      "pages": [0, 1, 2],
+      "note": "Condenser (p0), airflow/cooling (p1), and troubleshooting (p2) chapters are all relevant to the three symptoms — requires --live retrieval with the fixture ingested"
+    }
+  ]
+}

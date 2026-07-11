@@ -3,7 +3,7 @@
   "description": "Leaking pipe under the kitchen sink. Water pooling on floor. Started this morning.",
   "media": [],
   "sensor_readings": [],
-  "expected_complexity": "standard",
+  "expected_complexity": "simple",
   "expected": {
     "trade": "plumbing",
     "urgency": "urgent",
