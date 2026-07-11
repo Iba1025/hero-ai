@@ -15,6 +15,7 @@ from hero.storage.models import (
     DiagnosisClaim,
     Media,
     Ticket,
+    TicketEvent,
     User,
     WorkOrder,
 )
@@ -268,6 +269,70 @@ async def create_contractor_statement(
     session.add(stmt)
     await session.flush()
     return stmt
+
+
+async def append_ticket_events(
+    session: AsyncSession,
+    *,
+    ticket_id: uuid.UUID,
+    run_id: str,
+    events: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Append ledger events (P4-3). seq continues from the ticket's max —
+    single-writer-per-ticket at pilot volume, no concurrency gymnastics."""
+    if not events:
+        return
+    result = await session.execute(
+        select(func.coalesce(func.max(TicketEvent.seq), 0)).where(
+            TicketEvent.ticket_id == ticket_id
+        )
+    )
+    next_seq = int(result.scalar_one()) + 1
+    for offset, (state_name, payload) in enumerate(events):
+        session.add(
+            TicketEvent(
+                ticket_id=ticket_id,
+                run_id=run_id,
+                seq=next_seq + offset,
+                state=state_name,
+                payload=payload,
+            )
+        )
+    await session.flush()
+
+
+async def list_ticket_events(session: AsyncSession, ticket_id: uuid.UUID) -> list[TicketEvent]:
+    result = await session.execute(
+        select(TicketEvent).where(TicketEvent.ticket_id == ticket_id).order_by(TicketEvent.seq)
+    )
+    return list(result.scalars().all())
+
+
+async def get_diagnoses_with_claims(
+    session: AsyncSession, ticket_id: uuid.UUID
+) -> list[tuple[Diagnosis, list[DiagnosisClaim]]]:
+    """All diagnosis rows for a ticket (oldest first) with their claims (P4-3 ledger)."""
+    result = await session.execute(
+        select(Diagnosis).where(Diagnosis.ticket_id == ticket_id).order_by(Diagnosis.created_at)
+    )
+    out: list[tuple[Diagnosis, list[DiagnosisClaim]]] = []
+    for diag in result.scalars().all():
+        claims_result = await session.execute(
+            select(DiagnosisClaim).where(DiagnosisClaim.diagnosis_id == diag.id)
+        )
+        out.append((diag, list(claims_result.scalars().all())))
+    return out
+
+
+async def get_statements_for_ticket(
+    session: AsyncSession, ticket_id: uuid.UUID
+) -> list[ContractorStatement]:
+    result = await session.execute(
+        select(ContractorStatement)
+        .where(ContractorStatement.ticket_id == ticket_id)
+        .order_by(ContractorStatement.created_at)
+    )
+    return list(result.scalars().all())
 
 
 async def has_contractor_statement(session: AsyncSession, ticket_id: uuid.UUID) -> bool:

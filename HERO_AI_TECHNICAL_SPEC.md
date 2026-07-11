@@ -97,7 +97,9 @@ hero/
 │   ├── storage/
 │   │   ├── models.py              # SQLAlchemy models (§5)
 │   │   ├── media.py               # R2 presign helpers
-│   │   └── repo.py                # typed query layer; nodes never write raw SQL
+│   │   ├── repo.py                # typed query layer; nodes never write raw SQL
+│   │   ├── ledger.py              # P4-3: pure event derivation + ledger assembly (no DB)
+│   │   └── backfill_triage.py     # P4-2 follow-up: stamp trade/urgency onto pre-existing rows
 │   ├── ingestion/                 # manual corpus → Qdrant (offline job)
 │   ├── observability/             # Langfuse wiring, trace decorators
 │   ├── auth/                      # P4-1: argon2id passwords, JWT sessions, seed CLI (python -m hero.auth seed)
@@ -106,7 +108,7 @@ hero/
 │   ├── golden_tickets/            # labeled ticket fixtures (JSON)
 │   └── run_eval.py
 ├── web/                           # P4-2 cockpit SPA (Vite + React + TS, dependency-light)
-│   └── src/                       # screens/: Login, TicketList, Outcome (contractor front door)
+│   └── src/                       # screens/: Login, TicketList, Outcome (contractor), Ledger (operator, P4-3)
 └── tests/
     ├── unit/
     ├── integration/
@@ -316,6 +318,20 @@ CREATE TABLE app_user (                   -- P4-1 auth [IMPL: alembic/versions/0
 CREATE INDEX ON app_user (org_id);
 -- No self-signup: rows seeded via `python -m hero.auth seed`. Sessions are stateless
 -- HS256 JWTs (sub/org/role claims) in an httponly cookie; revocation = rotate JWT_SECRET_KEY.
+
+CREATE TABLE ticket_event (                -- P4-3 ledger [IMPL: alembic/versions/0005_ticket_event.py]
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id       UUID NOT NULL REFERENCES ticket(id),
+    run_id          TEXT NOT NULL,        -- thread id ("ticket-{id}"); shared by create + resume runs
+    seq             INTEGER NOT NULL,     -- per-ticket order; resume runs continue the sequence
+    state           TEXT NOT NULL,        -- triage|retrieve|clarify_pending|clarify_answered|diagnose|verify|safety_gate|procure
+    payload         JSONB NOT NULL DEFAULT '{}',  -- state substance; NO chunk text, NO claim rows (canonical in diagnosis_claim, DEC-6)
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ON ticket_event (ticket_id, seq);
+-- Append-only, written by the API layer after a graph run (nodes never touch the DB).
+-- Ledger assembly (storage/ledger.py) synthesizes intake from the ticket row and outcome
+-- from contractor_statement; states that never ran produce no rows (honest gaps).
 ```
 
 LangGraph checkpoint tables: managed by `langgraph-checkpoint-postgres` — do not hand-edit.
@@ -491,6 +507,9 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
   raises `IndexIntegrityError` — never degrade silently. Born from the 2026-07-10 incident:
   builtin `hash()` randomization left the sparse index silently dead and dense+RRF masked it.
 - **Types:** mypy --strict passes. No `Any` in `graph/`, `interfaces/`, `safety/`.
+- **Lockfiles (asymmetric, deliberate):** `web/package-lock.json` is committed (npm resolution
+  is too loose to reproduce without it); `uv.lock` stays gitignored — `pyproject.toml` pins are
+  tight enough for a single-service repo and the team predates the lockfile in CI.
 
 ## 12. Definition of Done — active backlog
 

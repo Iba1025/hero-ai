@@ -1,4 +1,11 @@
-import type { Me, OutcomeRequest, OutcomeResponse, TicketDetail, TicketSummary } from "./types";
+import type {
+  LedgerResponse,
+  Me,
+  OutcomeRequest,
+  OutcomeResponse,
+  TicketDetail,
+  TicketSummary,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -35,6 +42,7 @@ export const api = {
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
   listTickets: () => request<TicketSummary[]>("/tickets"),
   getTicket: (id: string) => request<TicketDetail>(`/tickets/${id}`),
+  getLedger: (id: string) => request<LedgerResponse>(`/tickets/${id}/ledger`),
   fileOutcome: (body: OutcomeRequest) =>
     request<OutcomeResponse>("/outcomes", { method: "POST", body: JSON.stringify(body) }),
 };

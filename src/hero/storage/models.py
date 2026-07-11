@@ -16,6 +16,7 @@ from sqlalchemy import (
     Double,
     ForeignKey,
     Index,
+    Integer,
     Text,
     Uuid,
     text,
@@ -150,6 +151,33 @@ class WorkOrder(Base):
     )
 
     ticket: Mapped[Ticket] = relationship(back_populates="work_orders")
+
+
+class TicketEvent(Base):
+    """P4-3 ledger journal — one row per pipeline state that actually ran.
+
+    Written by the API layer after graph runs (nodes never touch the DB).
+    Append-only; `seq` orders entries within a ticket; states that didn't
+    run have no row (the ledger never invents entries). Substance that is
+    canonically persisted elsewhere (per-claim rows in diagnosis_claim) is
+    NOT duplicated here — the ledger endpoint joins it in by run_id.
+    """
+
+    __tablename__ = "ticket_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
+    run_id: Mapped[str] = mapped_column(Text, nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (Index("ix_ticket_event_ticket_seq", "ticket_id", "seq"),)
 
 
 # Allowed contractor verdicts (BL-0). Kept next to the model so the DB CHECK,

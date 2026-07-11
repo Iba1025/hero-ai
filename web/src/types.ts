@@ -48,6 +48,26 @@ export interface TicketDetail {
   pending_question: string | null;
 }
 
+export interface LedgerEntry {
+  state: string;
+  ts: string;
+  run_id: string | null;
+  // Payload shape varies by state — rendered defensively, absent means absent.
+  data: Record<string, unknown>;
+}
+
+export interface LedgerResponse {
+  ticket_id: string;
+  building_id: string;
+  description: string;
+  status: string;
+  trade: string | null;
+  urgency: string | null;
+  complexity: string | null;
+  created_at: string;
+  entries: LedgerEntry[];
+}
+
 export type Verdict = "confirmed" | "partially_correct" | "wrong";
 
 export interface OutcomeRequest {

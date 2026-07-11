@@ -10,15 +10,21 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hero.api.deps import AuthUser, get_current_user, get_db_session, get_graph, require_role
+from hero.storage.ledger import assemble_ledger, events_from_state
+from hero.storage.models import Ticket
 from hero.storage.repo import (
-    create_ticket as repo_create_ticket,
-)
-from hero.storage.repo import (
+    append_ticket_events,
+    get_diagnoses_with_claims,
+    get_statements_for_ticket,
     get_ticket_for_org,
+    list_ticket_events,
     list_tickets_for_org,
     persist_diagnosis_from_state,
     stamp_ticket_triage,
     update_ticket_status,
+)
+from hero.storage.repo import (
+    create_ticket as repo_create_ticket,
 )
 
 router = APIRouter()
@@ -105,6 +111,10 @@ async def create_ticket(
 
     # Per-claim results → diagnosis_claim (BL-6). No-op while CLARIFY-interrupted.
     await persist_diagnosis_from_state(session, ticket_id=ticket.id, run_id=thread_id, state=result)
+    # Ledger journal (P4-3): one row per pipeline state that actually ran.
+    await append_ticket_events(
+        session, ticket_id=ticket.id, run_id=thread_id, events=events_from_state(result)
+    )
     # Triage runs before any CLARIFY interrupt, so trade/urgency are final here (P4-2).
     await stamp_ticket_triage(
         session,
@@ -187,8 +197,8 @@ async def get_ticket(
     )
 
 
-async def _require_ticket_in_org(session: AsyncSession, ticket_id: str, user: AuthUser) -> None:
-    """404 unless the ticket exists in the caller's org (P4-1 invariant).
+async def _require_ticket_in_org(session: AsyncSession, ticket_id: str, user: AuthUser) -> Ticket:
+    """Return the ticket, or 404 unless it exists in the caller's org (P4-1).
 
     404 (not 403) for cross-org ids — no cross-org existence leak. The org
     filter lives in the query (repo.get_ticket_for_org), not in caller code.
@@ -197,8 +207,61 @@ async def _require_ticket_in_org(session: AsyncSession, ticket_id: str, user: Au
         ticket_uuid = uuid.UUID(ticket_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Ticket not found") from exc
-    if await get_ticket_for_org(session, ticket_uuid, user.org_id) is None:
+    ticket = await get_ticket_for_org(session, ticket_uuid, user.org_id)
+    if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
+
+
+class LedgerEntry(BaseModel):
+    state: str
+    ts: str
+    run_id: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class LedgerResponse(BaseModel):
+    ticket_id: str
+    building_id: str
+    description: str
+    status: str
+    trade: str | None = None
+    urgency: str | None = None
+    complexity: str | None = None
+    created_at: str
+    entries: list[LedgerEntry]
+
+
+@router.get("/{ticket_id}/ledger", response_model=LedgerResponse)
+async def get_ticket_ledger(
+    ticket_id: str,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
+) -> LedgerResponse:
+    """The full audit trail (P4-3) — every entry from persisted rows.
+
+    Operator/admin only; contractors keep the narrower GET /tickets/{id} view.
+    States that didn't run don't appear (honest gaps, P4-3c).
+    """
+    ticket = await _require_ticket_in_org(session, ticket_id, user)
+    ticket_uuid = ticket.id
+    entries = assemble_ledger(
+        ticket,
+        await list_ticket_events(session, ticket_uuid),
+        await get_diagnoses_with_claims(session, ticket_uuid),
+        await get_statements_for_ticket(session, ticket_uuid),
+    )
+    return LedgerResponse(
+        ticket_id=str(ticket.id),
+        building_id=str(ticket.building_id),
+        description=ticket.description,
+        status=ticket.status,
+        trade=ticket.trade,
+        urgency=ticket.urgency,
+        complexity=ticket.complexity,
+        created_at=ticket.created_at.isoformat(),
+        entries=[LedgerEntry(**e) for e in entries],
+    )
 
 
 @router.post("/{ticket_id}/clarify-answer")
@@ -218,13 +281,30 @@ async def clarify_answer(
     if state is None or not state.values:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    if not state.values.get("pending_question"):
+    question = state.values.get("pending_question")
+    if not question:
         raise HTTPException(status_code=400, detail="Ticket is not awaiting clarification")
 
     # Resume the graph with the answer via Command
     from langgraph.types import Command
 
     result = await graph.ainvoke(Command(resume=request.answer), config=config)
+
+    # Ledger (P4-3): record the answered round, then whatever the resume ran.
+    events: list[tuple[str, dict[str, Any]]] = [
+        (
+            "clarify_answered",
+            {
+                "question": question,
+                "answer": request.answer,
+                "round": int(result.get("clarify_rounds") or 0),
+            },
+        )
+    ]
+    events += events_from_state(result, resumed=True)
+    await append_ticket_events(
+        session, ticket_id=uuid.UUID(ticket_id), run_id=thread_id, events=events
+    )
 
     # Run may now be complete — persist diagnosis + per-claim results (BL-6).
     if not result.get("pending_question"):
@@ -233,6 +313,6 @@ async def clarify_answer(
         )
         status = "escalated" if result.get("escalated") else "diagnosed"
         await update_ticket_status(session, uuid.UUID(ticket_id), status)
-        await session.commit()
+    await session.commit()
 
     return {"status": "resumed", "ticket_id": ticket_id}

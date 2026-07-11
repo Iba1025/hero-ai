@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
+import { Ledger } from "./screens/Ledger";
 import { Login } from "./screens/Login";
 import { Outcome } from "./screens/Outcome";
 import { TicketList } from "./screens/TicketList";
@@ -69,7 +70,13 @@ export function App() {
         </span>
       </header>
       {ticketMatch ? (
-        <Outcome ticketId={ticketMatch[1]} role={me.role} onAuthError={onAuthError} />
+        // Same route, role-appropriate view: operators/admins get the full
+        // audit-trail ledger; contractors keep the narrower outcome screen.
+        me.role === "contractor" ? (
+          <Outcome ticketId={ticketMatch[1]} role={me.role} onAuthError={onAuthError} />
+        ) : (
+          <Ledger ticketId={ticketMatch[1]} onAuthError={onAuthError} />
+        )
       ) : (
         <TicketList onAuthError={onAuthError} />
       )}
