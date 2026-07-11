@@ -11,32 +11,12 @@ Both paths emit retrieval_stage on every chunk for eval attribution.
 
 from __future__ import annotations
 
-import re
-
 from qdrant_client import QdrantClient
-from qdrant_client.models import SparseVector
 
 from hero.graph.state import EvidenceChunk
-from hero.ingestion.ingest import COLLECTION_NAME
+from hero.ingestion.ingest import COLLECTION_NAME, text_to_sparse_vector
 from hero.interfaces.embedder import Embedder
 from hero.interfaces.reranker import Reranker
-
-
-def _text_to_sparse_query(text: str) -> SparseVector:
-    """Convert query text to sparse vector (same tokenization as ingestion)."""
-    tokens = re.findall(r"[a-z0-9][\w-]*", text.lower())
-    tf: dict[str, int] = {}
-    for token in tokens:
-        tf[token] = tf.get(token, 0) + 1
-
-    indices: list[int] = []
-    values: list[float] = []
-    for token, count in sorted(tf.items()):
-        idx = hash(token) % (2**31)
-        indices.append(abs(idx))
-        values.append(float(count))
-
-    return SparseVector(indices=indices, values=values)
 
 
 def _reciprocal_rank_fusion(
@@ -104,7 +84,7 @@ def retrieve_bm25(
     top_k: int = 25,
 ) -> list[EvidenceChunk]:
     """BM25 sparse vector retrieval via Qdrant."""
-    sparse_query = _text_to_sparse_query(query)
+    sparse_query = text_to_sparse_vector(query)
     results = client.query_points(
         collection_name=COLLECTION_NAME,
         query=sparse_query,

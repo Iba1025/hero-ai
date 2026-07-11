@@ -1,0 +1,31 @@
+{
+  "ticket_id": "EVAL-004",
+  "description": "Kitchen faucet dripping steadily from the spout. Everything else works fine.",
+  "media": [],
+  "sensor_readings": [],
+  "expected": {
+    "trade": "plumbing",
+    "urgency": "routine",
+    "complexity": "simple",
+    "escalated": false,
+    "has_diagnosis": true,
+    "has_work_order": true,
+    "has_sku": true,
+    "requires_clarify": false
+  },
+  "label": {
+    "actual_fault": "Worn faucet cartridge",
+    "verdict": "confirmed"
+  },
+  "expected_claims": {
+    "min_grounding_rate": 0.8,
+    "note": "BL-4 fast-path ticket: complexity=simple routes to retrieve_fast (BM25-only top 5, no rerank). Claims should ground against the faucet-cartridge chapter (FC-200-BR) of the plumbing fixture manual."
+  },
+  "expected_evidence": [
+    {
+      "doc_id": "test-manual",
+      "pages": [1, 2],
+      "note": "Faucet cartridge chapter (p1) and troubleshooting 'Dripping faucet: Replace cartridge FC-200-BR' (p2) of tests/fixtures/test_plumbing_manual.pdf — requires --live retrieval"
+    }
+  ]
+}

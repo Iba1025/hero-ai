@@ -308,6 +308,13 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
     checks["urgency_match"] = result.get("urgency") == expected.get("urgency")
     checks["escalation_correct"] = result.get("escalated") == expected.get("escalated")
 
+    # BL-4 complexity routing: which retrieval path actually ran (from the
+    # node-latency trace — retrieve_fast only exists on the fast path).
+    checks["complexity"] = result.get("complexity")
+    checks["path"] = "fast" if "retrieve_fast" in run_result.get("node_latency", {}) else "full"
+    if "complexity" in expected:
+        checks["complexity_match"] = result.get("complexity") == expected["complexity"]
+
     if expected.get("escalation_reason"):
         checks["escalation_reason_match"] = (
             result.get("escalation_reason") == expected["escalation_reason"]
@@ -383,6 +390,8 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
     critical_checks = [
         checks.get("escalation_correct", False),
         checks.get("diagnosis_present", True),
+        # BL-4: gated only when the golden ticket pins an expected complexity.
+        checks.get("complexity_match", True),
     ]
     checks["pass"] = all(critical_checks)
 
@@ -438,6 +447,8 @@ async def main() -> int:
             print(
                 f"  trade={result.get('trade')} "
                 f"urgency={result.get('urgency')} "
+                f"complexity={result.get('complexity')} "
+                f"path={checks['path']} "
                 f"escalated={result.get('escalated')} "
                 f"escalation_reason={result.get('escalation_reason')}"
             )
@@ -505,6 +516,27 @@ async def main() -> int:
         print()
     if len(all_results) > 0:
         print(f"Avg cost/ticket: ${total_cost / len(all_results):.4f}")
+
+    # BL-4 DoD: cost/latency split by routing path (fast vs full).
+    print("\nPath split (BL-4 — fast vs full):")
+    for path in ("fast", "full"):
+        rs = [r for r in all_results if r.get("path") == path]
+        if not rs:
+            print(f"  {path}: n=0")
+            continue
+        avg_lat = sum(r["latency_s"] for r in rs) / len(rs)
+        avg_cost = sum(r["cost_usd"] for r in rs) / len(rs)
+        retrieve_node = "retrieve_fast" if path == "fast" else "retrieve"
+        r_lats = [
+            r["node_latency_s"][retrieve_node]
+            for r in rs
+            if retrieve_node in r.get("node_latency_s", {})
+        ]
+        r_lat = f"{sum(r_lats) / len(r_lats):.2f}s" if r_lats else "n/a"
+        print(
+            f"  {path}: n={len(rs)} avg_latency={avg_lat:.3f}s "
+            f"avg_cost=${avg_cost:.4f} avg_{retrieve_node}={r_lat}"
+        )
 
     # Spread across repeated runs (DEC-20: primary tier is non-deterministic).
     if args.runs > 1:

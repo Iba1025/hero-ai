@@ -54,12 +54,28 @@ def _render_page_image(pdf_path: str, page_idx: int, scale: float = 2.0) -> byte
     return buf.getvalue()
 
 
-def _text_to_sparse_vector(text: str) -> SparseVector:
+def stable_token_index(token: str) -> int:
+    """Stable 31-bit sparse index for a token.
+
+    MUST be process-stable: builtin hash() is randomized per process
+    (PYTHONHASHSEED), so indices written at ingestion time never matched
+    query-time indices — BM25 silently returned zero results. Found live
+    2026-07-10 when the BL-4 fast path (BM25-only) escalated every ticket
+    with diagnosis_unparseable; the full path had masked it via dense+RRF.
+    """
+    digest = hashlib.sha1(token.encode()).digest()
+    return int.from_bytes(digest[:4], "big") % (2**31)
+
+
+def text_to_sparse_vector(text: str) -> SparseVector:
     """Convert text to a simple BM25-style sparse vector.
 
     Uses term frequency as weights. Qdrant sparse vectors are stored
     alongside dense multivectors in the same collection (spec §7:
     BM25 via Qdrant sparse vectors — do not add Elasticsearch).
+
+    Shared by ingestion and query side (retrieval/hybrid.py) — the two
+    MUST tokenize and index identically or BM25 matches nothing.
     """
     # Tokenize: lowercase, split on non-alphanumeric, filter short tokens
     tokens = re.findall(r"[a-z0-9][\w-]*", text.lower())
@@ -68,13 +84,10 @@ def _text_to_sparse_vector(text: str) -> SparseVector:
     for token in tokens:
         tf[token] = tf.get(token, 0) + 1
 
-    # Convert to sparse vector: hash tokens to indices
     indices: list[int] = []
     values: list[float] = []
     for token, count in sorted(tf.items()):
-        # Use a simple hash → index mapping
-        idx = hash(token) % (2**31)
-        indices.append(abs(idx))
+        indices.append(stable_token_index(token))
         values.append(float(count))
 
     return SparseVector(indices=indices, values=values)
@@ -154,7 +167,7 @@ def ingest_pdf(
         points: list[PointStruct] = []
         for i, page_idx in enumerate(page_indices):
             text = _extract_page_text(pdf_path, page_idx)
-            sparse = _text_to_sparse_vector(text)
+            sparse = text_to_sparse_vector(text)
             point_id = _point_id(doc_id, page_idx)
 
             points.append(

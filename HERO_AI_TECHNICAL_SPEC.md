@@ -204,7 +204,10 @@ class TicketState(BaseModel):
 - Checkpointer: `PostgresSaver` on `DATABASE_URL`. Every node runs under it (INV-6).
 - `CLARIFY` uses `interrupt()` — the graph pauses, `pending_question` is surfaced via API,
   human answer resumes the run at RETRIEVE. `clarify_rounds >= 3` → route to human dispatcher, not another loop.
-- Conditional edges: `TRIAGE → {fast_path | full_path}` on `complexity` (BL-4);
+- Conditional edges: `TRIAGE → {retrieve_fast | retrieve}` on `complexity` (BL-4) —
+  two distinct graph nodes (`retrieve_fast` = `make_retrieve(..., fast_path=True)`), so the
+  taken path is visible in checkpoints and eval traces; CLARIFY always loops back to full
+  `retrieve` (a ticket that needed clarification is not "simple");
   `VERIFY → SAFETY_GATE` unconditional (never skippable, INV-1);
   `SAFETY_GATE → {ESCALATE | RESOLVE}`.
 
@@ -322,6 +325,7 @@ class Calibrator(Protocol):
 
 # vlm.py — the ONLY route to LLM providers (via LiteLLM adapter)
 class VLM(Protocol):
+    async def triage(self, description: str) -> TriageResult: ...          # BL-4, primary tier (DEC-21 fail-safes live in the node)
     async def diagnose(self, state: TicketState) -> list[Hypothesis]: ...
     async def decompose_claims(self, hypothesis_text: str) -> list[str]: ...
     async def check_entailment(self, claim: str, evidence_text: str) -> bool: ...
@@ -464,7 +468,7 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
 | BL-1 | `Reranker` Protocol + bge adapter + wired into full path + eval shows hit-rate@5 lift + Cohere adapter behind config flag |
 | BL-2 | `platt.py` adapter default; isotonic adapter exists but gated on label_count ≥ 1000; ECE reported per eval run |
 | BL-3 | `evals/` runnable locally + CI; ≥20 golden tickets seeded |
-| BL-4 | `complexity` classifier in TRIAGE + conditional edge + cost/latency split visible in eval report |
+| BL-4 | ✅ VLM `triage()` (primary tier) + `TriageResult` Literal vocabulary gate + DEC-21 keyword fail-safes in `graph/nodes/triage.py`; `retrieve_fast` node behind `TRIAGE` conditional edge; eval prints per-ticket `complexity=`/`path=` and a fast-vs-full "Path split" section (latency, cost, retrieve-node latency); `test_triage_routing.py` covers parse gate, fail-safes, routing |
 | BL-5 | Both embedder adapters pass contract tests; bake-off report (NDCG on our manuals, $/1k pages, latency) committed to `docs/` |
 | BL-9 | Evidence grader + query rewrite + `max_corrective_rounds`/timeout caps + eval shows lift on hard-query subset without >1.5× median latency on simple tickets |
 | BL-10 | `ConformalGate` with configurable α + escalation on non-singleton/hazard sets + coverage monitoring in Langfuse + INV-1 hard rules provably unaffected (invariant test) |

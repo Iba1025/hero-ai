@@ -6,11 +6,17 @@ VERIFY and SAFETY_GATE without any real model call.
 
 from __future__ import annotations
 
-from hero.graph.state import Claim, EvidenceChunk, Hypothesis, TicketState
+from hero.graph.nodes.triage import keyword_triage
+from hero.graph.state import Claim, EvidenceChunk, Hypothesis, TicketState, TriageResult
 
 
 class StubVLM:
     """Deterministic VLM that returns a fixed hypothesis based on ticket trade."""
+
+    async def triage(self, description: str) -> TriageResult:
+        """Deterministic triage via the keyword classifier (BL-4)."""
+        trade, urgency, complexity = keyword_triage(description)
+        return TriageResult(trade=trade, urgency=urgency, complexity=complexity)
 
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:
         trade = state.trade or "other"

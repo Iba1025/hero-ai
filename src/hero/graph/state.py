@@ -25,6 +25,19 @@ TradeCategory = Literal[
 Complexity = Literal["simple", "standard", "complex"]
 
 
+Urgency = Literal["emergency", "urgent", "routine"]
+
+
+class TriageResult(BaseModel):
+    """VLM triage output (BL-4). Pydantic validation IS the parse gate —
+    an out-of-vocabulary trade/urgency/complexity fails validation and the
+    TRIAGE node falls back to the deterministic keyword classifier."""
+
+    trade: TradeCategory
+    urgency: Urgency
+    complexity: Complexity
+
+
 class MediaRef(BaseModel):
     """R2 key — POINTER ONLY (INV-3)."""
 
@@ -78,7 +91,7 @@ class TicketState(BaseModel):
     sensor_readings: list[SensorReading] = Field(default_factory=list)  # INV-7: may be empty
 
     # TRIAGE
-    urgency: Literal["emergency", "urgent", "routine"] | None = None
+    urgency: Urgency | None = None
     trade: TradeCategory | None = None
     complexity: Complexity | None = None  # BL-4
 

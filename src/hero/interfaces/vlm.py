@@ -7,7 +7,16 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from hero.graph.state import Hypothesis, TicketState
+from hero.graph.state import Hypothesis, TicketState, TriageResult
+
+
+class TriageParseError(Exception):
+    """Raised when a triage response cannot be parsed/validated (BL-4).
+
+    Unlike DiagnosisParseError this is recoverable: the TRIAGE node falls
+    back to the deterministic keyword classifier (full path) — a triage
+    failure must never block a ticket or route it to the fast path.
+    """
 
 
 class DiagnosisParseError(Exception):
@@ -21,6 +30,10 @@ class DiagnosisParseError(Exception):
 
 @runtime_checkable
 class VLM(Protocol):
+    async def triage(self, description: str) -> TriageResult:
+        """Classify trade + urgency + complexity (BL-4)."""
+        ...
+
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:
         """Form fault hypotheses from ticket + evidence."""
         ...

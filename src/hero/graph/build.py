@@ -1,4 +1,4 @@
-"""Graph assembly — wires all 10 nodes with PostgresSaver (spec §4).
+"""Graph assembly — wires the pipeline nodes with PostgresSaver (spec §4).
 
 Every node runs under the checkpointer (INV-6).
 CLARIFY uses interrupt() — graph pauses, pending_question surfaced via API.
@@ -30,10 +30,13 @@ from hero.interfaces.vlm import VLM
 
 
 def _route_after_triage(state: dict[str, Any]) -> str:
-    """Conditional edge: TRIAGE → RETRIEVE (always in skeleton).
+    """Conditional edge: TRIAGE → retrieve_fast | retrieve on complexity (BL-4).
 
-    BL-4 will add complexity routing (fast_path | full_path).
+    Only an explicit "simple" takes the fast path — anything else
+    (standard, complex, missing) gets full hybrid retrieval.
     """
+    if state.get("complexity") == "simple":
+        return "retrieve_fast"
     return "retrieve"
 
 
@@ -49,7 +52,11 @@ def _route_after_retrieve(state: dict[str, Any]) -> str:
 
 
 def _route_after_clarify(state: dict[str, Any]) -> str:
-    """After CLARIFY: always loop back to RETRIEVE."""
+    """After CLARIFY: always loop back to full RETRIEVE.
+
+    A ticket that needed clarification is by definition not "simple" —
+    the loop never re-enters the fast path (BL-4).
+    """
     return "retrieve"
 
 
@@ -84,6 +91,9 @@ def build_graph(
     # Create node functions with injected adapters
     triage_fn = make_triage(vlm)
     retrieve_fn = make_retrieve(embedder, reranker, qdrant_client=qdrant_client)
+    retrieve_fast_fn = make_retrieve(
+        embedder, reranker, qdrant_client=qdrant_client, fast_path=True
+    )
     diagnose_fn = make_diagnose(vlm)
     verify_fn = make_verify(vlm, calibrator, grounding_threshold, grounding_threshold_strict)
     procure_fn = make_procure(catalog)
@@ -91,10 +101,11 @@ def build_graph(
     # Build the state graph
     graph = StateGraph(GraphState)
 
-    # Add all 10 nodes
+    # Add all nodes
     graph.add_node("intake", intake)
     graph.add_node("triage", triage_fn)
     graph.add_node("retrieve", retrieve_fn)
+    graph.add_node("retrieve_fast", retrieve_fast_fn)  # BL-4 fast path
     graph.add_node("clarify", clarify)
     graph.add_node("diagnose", diagnose_fn)
     graph.add_node("verify", verify_fn)
@@ -108,11 +119,12 @@ def build_graph(
     graph.add_edge(START, "intake")
     graph.add_edge("intake", "triage")
 
-    # TRIAGE → RETRIEVE (conditional for BL-4 complexity routing)
-    graph.add_conditional_edges("triage", _route_after_triage, ["retrieve"])
+    # TRIAGE → retrieve_fast (complexity=="simple") | retrieve (BL-4)
+    graph.add_conditional_edges("triage", _route_after_triage, ["retrieve", "retrieve_fast"])
 
-    # RETRIEVE → CLARIFY or DIAGNOSE
+    # RETRIEVE (either path) → CLARIFY or DIAGNOSE
     graph.add_conditional_edges("retrieve", _route_after_retrieve, ["clarify", "diagnose"])
+    graph.add_conditional_edges("retrieve_fast", _route_after_retrieve, ["clarify", "diagnose"])
 
     # CLARIFY → RETRIEVE (loop back)
     graph.add_conditional_edges("clarify", _route_after_clarify, ["retrieve"])

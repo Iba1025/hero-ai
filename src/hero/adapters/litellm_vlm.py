@@ -17,9 +17,10 @@ import logging
 from pathlib import Path
 
 import litellm
+from pydantic import ValidationError
 
-from hero.graph.state import Claim, Hypothesis, TicketState
-from hero.interfaces.vlm import DiagnosisParseError
+from hero.graph.state import Claim, Hypothesis, TicketState, TriageResult
+from hero.interfaces.vlm import DiagnosisParseError, TriageParseError
 from hero.verification.claims import gather_evidence_text
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,26 @@ def _render(template: str, **values: str) -> str:
 _DIAGNOSE_PROMPT = _load_prompt("diagnose")
 _DECOMPOSE_PROMPT = _load_prompt("decompose_claims")
 _ENTAILMENT_PROMPT = _load_prompt("check_entailment")
+_TRIAGE_PROMPT = _load_prompt("triage")
+
+
+def parse_triage(raw: str) -> TriageResult:
+    """Strictly parse a triage response (BL-4).
+
+    TriageResult's Literal fields are the vocabulary gate — any
+    out-of-vocabulary value raises TriageParseError. The TRIAGE node
+    catches it and falls back to the keyword classifier (full path).
+    """
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise TriageParseError(f"triage response is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise TriageParseError(f"triage response is not an object: {data!r:.200}")
+    try:
+        return TriageResult.model_validate(data)
+    except ValidationError as exc:
+        raise TriageParseError(f"triage response failed validation: {exc}") from exc
 
 
 def parse_diagnosis(raw: str) -> list[Hypothesis]:
@@ -191,6 +212,16 @@ class LiteLLMVLM:
             bucket["completion_tokens"] += int(completion_tokens or 0)
         except Exception:  # never let metrics logging break a call
             logger.debug("[VLM-COST] tier=%s cost unavailable", tier)
+
+    async def triage(self, description: str) -> TriageResult:
+        """Classify trade + urgency + complexity — uses PRIMARY model (DEC-18).
+
+        Raises TriageParseError on unparseable output; the TRIAGE node
+        falls back to the deterministic keyword classifier (BL-4).
+        """
+        prompt = _render(_TRIAGE_PROMPT, description=description)
+        raw = await self._call(self._primary, prompt, "primary/triage")
+        return parse_triage(raw)
 
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:
         """Form fault hypotheses — uses PRIMARY model (reasoning-heavy).
