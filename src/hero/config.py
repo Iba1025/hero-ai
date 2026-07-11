@@ -82,8 +82,15 @@ class Settings(BaseSettings):
     reranker_impl: Literal["bge", "cohere", "stub"] = Field(default="stub")
     calibrator_impl: Literal["platt", "isotonic", "stub"] = Field(default="platt")
 
-    # ── Retrieval tuning ─────────────────────────────────────────────────
-    grounding_threshold: float = Field(default=0.8)
+    # ── Retrieval / verification tuning ──────────────────────────────────
+    grounding_threshold: float = Field(
+        default=0.8,
+        description="VERIFY grounding-rate threshold for descriptive claims (BL-6/DEC-6)",
+    )
+    grounding_threshold_strict: float = Field(
+        default=1.0,
+        description="VERIFY grounding-rate threshold for part-number/model-code claims (BL-6)",
+    )
     max_clarify_rounds: int = Field(default=3)
     max_corrective_rounds: int = Field(default=2)
     corrective_timeout_s: float = Field(default=10.0)

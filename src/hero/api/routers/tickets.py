@@ -5,10 +5,18 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from hero.api.deps import get_graph
+from hero.api.deps import get_db_session, get_graph
+from hero.storage.repo import (
+    create_ticket as repo_create_ticket,
+)
+from hero.storage.repo import (
+    persist_diagnosis_from_state,
+    update_ticket_status,
+)
 
 router = APIRouter()
 
@@ -46,10 +54,20 @@ class TicketStatusResponse(BaseModel):
 
 
 @router.post("", response_model=CreateTicketResponse)
-async def create_ticket(request: CreateTicketRequest) -> CreateTicketResponse:
-    """Create a ticket and start the graph run."""
+async def create_ticket(
+    request: CreateTicketRequest,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> CreateTicketResponse:
+    """Create a ticket row, run the graph, persist diagnosis + claims (DEC-6)."""
     graph = await get_graph()
-    ticket_id = str(uuid.uuid4())
+
+    ticket = await repo_create_ticket(
+        session,
+        org_id=uuid.UUID(request.org_id),
+        building_id=uuid.UUID(request.building_id),
+        description=request.description,
+    )
+    ticket_id = str(ticket.id)
     thread_id = f"ticket-{ticket_id}"
 
     config = {"configurable": {"thread_id": thread_id}}
@@ -63,11 +81,16 @@ async def create_ticket(request: CreateTicketRequest) -> CreateTicketResponse:
 
     result = await graph.ainvoke(input_state, config=config)
 
-    status = "resolved"
+    status = "diagnosed"
     if result.get("escalated"):
         status = "escalated"
     elif result.get("pending_question"):
         status = "clarifying"
+
+    # Per-claim results → diagnosis_claim (BL-6). No-op while CLARIFY-interrupted.
+    await persist_diagnosis_from_state(session, ticket_id=ticket.id, run_id=thread_id, state=result)
+    await update_ticket_status(session, ticket.id, status)
+    await session.commit()
 
     return CreateTicketResponse(
         ticket_id=ticket_id,
@@ -112,7 +135,11 @@ async def get_ticket(ticket_id: str) -> TicketStatusResponse:
 
 
 @router.post("/{ticket_id}/clarify-answer")
-async def clarify_answer(ticket_id: str, request: ClarifyAnswerRequest) -> dict[str, str]:
+async def clarify_answer(
+    ticket_id: str,
+    request: ClarifyAnswerRequest,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> dict[str, str]:
     """Resume an interrupted run with a clarification answer."""
     graph = await get_graph()
     thread_id = f"ticket-{ticket_id}"
@@ -128,6 +155,15 @@ async def clarify_answer(ticket_id: str, request: ClarifyAnswerRequest) -> dict[
     # Resume the graph with the answer via Command
     from langgraph.types import Command
 
-    await graph.ainvoke(Command(resume=request.answer), config=config)
+    result = await graph.ainvoke(Command(resume=request.answer), config=config)
+
+    # Run may now be complete — persist diagnosis + per-claim results (BL-6).
+    if not result.get("pending_question"):
+        await persist_diagnosis_from_state(
+            session, ticket_id=uuid.UUID(ticket_id), run_id=thread_id, state=result
+        )
+        status = "escalated" if result.get("escalated") else "diagnosed"
+        await update_ticket_status(session, uuid.UUID(ticket_id), status)
+        await session.commit()
 
     return {"status": "resumed", "ticket_id": ticket_id}

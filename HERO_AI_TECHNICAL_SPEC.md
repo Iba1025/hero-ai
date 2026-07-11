@@ -259,8 +259,9 @@ CREATE TABLE diagnosis_claim (            -- DEC-6 audit trail
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     diagnosis_id    UUID NOT NULL REFERENCES diagnosis(id),
     claim_text      TEXT NOT NULL,
+    claim_type      TEXT NOT NULL DEFAULT 'descriptive',  -- part_number|descriptive (BL-6/DEC-19)
     grounded        BOOLEAN NOT NULL,
-    evidence        JSONB NOT NULL        -- [{doc_id, page, region?, score}]
+    evidence        JSONB NOT NULL        -- {chunks: [{doc_id, page, region?, score}]}
 );
 
 CREATE TABLE work_order (
@@ -351,16 +352,21 @@ query → [BM25 index, top 25]                        ┘
   quantization + on-disk storage once corpus exceeds ~50K pages. Validate <1% nDCG@5 delta in
   the BL-3 eval before enabling in prod.
 
-## 8. Verification `[IMPL: src/hero/graph/nodes/verify.py, src/hero/adapters/platt.py]` — `src/hero/verification/`
+## 8. Verification `[IMPL: src/hero/graph/nodes/verify.py, src/hero/verification/claims.py, src/hero/adapters/platt.py]` — `src/hero/verification/`
 
-Per hypothesis: `VLM.decompose_claims` → for each claim, gather top evidence text →
-`VLM.check_entailment(claim, evidence)` → `Claim.grounded`.
-`verify_pass = (grounded_claims / total_claims) >= GROUNDING_THRESHOLD` (config, default 1.0
-for part numbers / model codes claims; 0.8 for descriptive claims — claim classifier decides).
-**Claim classifier + per-claim-type thresholds are BL-6 (DEC-6) `[SPEC]`** — current impl applies
-the single `GROUNDING_THRESHOLD` and passes stub evidence text; real evidence-text wiring lands
-with BL-6. Calibrators (DEC-5): `PlattCalibrator` default, `IsotonicCalibrator` self-gated ≥1000
-labels, binned ECE reported per eval run (BL-2 ✅).
+Per hypothesis: for each claim → classify → gather top evidence text
+(`EvidenceChunk.text` from the Qdrant payload, top-5 post-rerank) →
+`VLM.check_entailment(claim, evidence)` (VERIFY model tier, DEC-18) → `Claim.grounded`.
+**Claim classifier (BL-6 ✅ / DEC-6):** deterministic regex in
+`verification/claims.py` (data-as-code, no LLM) tags each claim
+`part_number` or `descriptive`; per-type thresholds from config:
+`GROUNDING_THRESHOLD_STRICT` (default 1.0) for part-number/model-code claims,
+`GROUNDING_THRESHOLD` (default 0.8) for descriptive claims.
+`verify_pass` = every hypothesis clears the threshold for **each claim type present**.
+Per-claim results (text, type, grounded, evidence citations) are persisted to
+`diagnosis_claim` by the API layer via `storage/repo.persist_diagnosis_from_state`
+(nodes never touch the DB). Calibrators (DEC-5): `PlattCalibrator` default,
+`IsotonicCalibrator` self-gated ≥1000 labels, binned ECE reported per eval run (BL-2 ✅).
 The **per-claim rate** is what's persisted and evaluated (DEC-6), never an answer-level average alone.
 `calibrated_confidence = Calibrator.calibrate(grounding_rate, trade)` — the only confidence
 number that ever leaves the system (INV-4).

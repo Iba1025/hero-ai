@@ -125,6 +125,8 @@ class DiagnosisClaim(Base):
         Uuid, ForeignKey("diagnosis.id"), nullable=False
     )
     claim_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # BL-6/DEC-19: which grounding threshold applied (part_number | descriptive)
+    claim_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="descriptive")
     grounded: Mapped[bool] = mapped_column(Boolean, nullable=False)
     evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
 

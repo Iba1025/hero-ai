@@ -206,6 +206,7 @@ async def run_ticket(
         "elapsed_s": elapsed,
         "expected": expected,
         "expected_evidence": ticket.get("expected_evidence"),
+        "expected_claims": ticket.get("expected_claims"),
         "label": ticket.get("label", {}),
     }
 
@@ -237,15 +238,33 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
     if "has_sku" in expected:
         checks["sku_correct"] = checks["has_sku"] == expected["has_sku"]
 
+    # Per-claim grounding (BL-6/DEC-6): overall and split by claim type,
+    # since part_number and descriptive claims carry different thresholds.
     hypotheses = result.get("hypotheses", [])
     total_claims = 0
     grounded_claims = 0
+    by_type: dict[str, list[int]] = {}  # type -> [grounded, total]
     for hyp in hypotheses:
         for claim in hyp.get("claims", []):
             total_claims += 1
-            if claim.get("grounded"):
+            ctype = claim.get("claim_type") or "descriptive"
+            grounded_n, total_n = by_type.get(ctype, [0, 0])
+            is_grounded = bool(claim.get("grounded"))
+            by_type[ctype] = [grounded_n + int(is_grounded), total_n + 1]
+            if is_grounded:
                 grounded_claims += 1
     checks["grounding_rate"] = grounded_claims / total_claims if total_claims > 0 else None
+    checks["claim_counts_by_type"] = {t: n for t, (_, n) in by_type.items()}
+    checks["grounding_rate_by_type"] = {t: g / n for t, (g, n) in by_type.items() if n > 0}
+
+    # Claim-level annotation check (BL-6). Reported, not run-blocking.
+    expected_claims = run_result.get("expected_claims")
+    if expected_claims and checks["grounding_rate"] is not None:
+        checks["claim_grounding_meets_min"] = (
+            checks["grounding_rate"] >= expected_claims["min_grounding_rate"]
+        )
+    else:
+        checks["claim_grounding_meets_min"] = None
 
     evidence = result.get("evidence", [])
     checks["retrieval_count"] = len(evidence)
@@ -325,8 +344,12 @@ async def main() -> int:
         )
         print(
             f"  grounding_rate={checks['grounding_rate']} "
-            f"retrieval@5={checks['retrieval_hit_rate_at_5']} "
-            f"latency={checks['latency_s']:.3f}s"
+            f"by_type={checks['grounding_rate_by_type']} "
+            f"claims={checks['claim_counts_by_type']} "
+            f"meets_min={checks['claim_grounding_meets_min']}"
+        )
+        print(
+            f"  retrieval@5={checks['retrieval_hit_rate_at_5']} latency={checks['latency_s']:.3f}s"
         )
 
         if not checks["pass"]:
@@ -343,6 +366,14 @@ async def main() -> int:
     avg_grounding = [r["grounding_rate"] for r in all_results if r["grounding_rate"] is not None]
     if avg_grounding:
         print(f"Avg grounding rate: {sum(avg_grounding) / len(avg_grounding):.2f}")
+
+    # Per-claim-type grounding across the run (BL-6/DEC-6)
+    agg_by_type: dict[str, list[float]] = {}
+    for r in all_results:
+        for ctype, rate in r.get("grounding_rate_by_type", {}).items():
+            agg_by_type.setdefault(ctype, []).append(rate)
+    for ctype, rates in sorted(agg_by_type.items()):
+        print(f"Grounding rate [{ctype}]: {sum(rates) / len(rates):.2f} over {len(rates)} tickets")
 
     # Hit-rate@5 over annotated tickets only (spec §10.2). Stub retrieval
     # cannot hit real manual pages — expect 0.00 in stub mode, lift in --live.

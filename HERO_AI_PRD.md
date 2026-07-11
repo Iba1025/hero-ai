@@ -77,7 +77,7 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 | `RETRIEVE` | Hybrid retrieval over manual corpus | ✅ Reranker landed (BL-1); 🔄 corrective loop (BL-9) |
 | `CLARIFY` | HITL follow-up question, loop to RETRIEVE | Graph pauses here; checkpointer makes it resumable |
 | `DIAGNOSE` | VLM forms fault hypotheses | Tiered via LiteLLM (DEC-18): claude-fable-5 primary, claude-sonnet-4-6 verify tier, gpt-4o fallback |
-| `VERIFY` | Ground each claim against evidence | 🔄 Claim-level checks (BL-6 / DEC-6) |
+| `VERIFY` | Ground each claim against evidence | ✅ Claim-level checks landed (BL-6 / DEC-6, DEC-19): real evidence text, per-type thresholds |
 | `SAFETY_GATE` | Hard escalation check | INV-1. Category-based, confidence-independent. 🔄 Conformal prediction sets (BL-10) |
 | `RESOLVE` | Fix recommendation + work order | |
 | `PROCURE` | NL part need → catalog SKU | 🔄 Deterministic compatibility hard-filters (BL-11) |
@@ -180,7 +180,7 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 | **BL-9** | Corrective retrieval loop: grade evidence, re-retrieve before DIAGNOSE, capped + timeout (DEC-11) | ~1 wk | Double-digit gains on hard queries; needs BL-3 to measure |
 | **BL-5** | Embedder bake-off: ColQwen3-4B vs ColModernVBERT on our manuals (DEC-2) | ~1 wk | Quality and/or ~28× cost improvement candidate |
 | **BL-12** | Int8 quantization + on-disk Qdrant index (DEC-9) | days | ~4× storage cut, <1% quality loss; do when corpus grows |
-| **BL-6** | Claim-level VERIFY (DEC-6) | | After BL-1; verification is only as good as evidence |
+| **BL-6** | ✅ 2026-07: Claim-level VERIFY (DEC-6) — real `EvidenceChunk.text` into entailment (VERIFY tier); deterministic claim classifier (`verification/claims.py`) with per-type thresholds (part_number 1.0 / descriptive 0.8, config); per-claim results persisted to `diagnosis_claim` incl. `claim_type` (DEC-19); eval reports per-type grounding | | After BL-1; verification is only as good as evidence |
 | **BL-10** | Conformal prediction sets at SAFETY_GATE (DEC-14) | 1–2 q | Needs calibration data; strongest new safety primitive |
 | **BL-11** | Deterministic procurement compatibility hard-filters (DEC-12) | | With procurement plane build-out; blocked partly on OPEN-1 |
 | **BL-7** | ⏸ Region-level evidence grounding (patch-to-region) | deferred | Post-traction audit-artifact upgrade |
@@ -285,6 +285,7 @@ large labeled multi-trade dataset → fine-tuning (DEC-15) and time-series work 
 | DEC-16 | 2026-07 | **REJECT** raw BMS time-series text serialization | Fails on long sequences; if ever needed, specialized TS encoder → summary; INV-7 holds |
 | DEC-17 | 2026-07 | Dual state representation: `TicketState` (Pydantic) + `GraphState` (TypedDict) | LangGraph's `StateGraph` requires a TypedDict (or `dataclass`/`dict`) to define the state schema for channel-based merging — it does not accept Pydantic `BaseModel`. The spec §4 `TicketState` (Pydantic) is retained for validation inside nodes (e.g. `diagnose` constructs it to validate inputs). `GraphState` (TypedDict) mirrors it field-for-field and is used only as the `StateGraph` type parameter. Both live in `src/hero/graph/state.py`. |
 | DEC-18 | 2026-07 | Tiered VLM routing: `claude-fable-5` primary (DIAGNOSE/TRIAGE), `claude-sonnet-4-6` verify (decompose_claims/check_entailment), `gpt-4o` cross-provider fallback (both tiers). All three model IDs are config — never hard-coded in the adapter. | Reasoning-heavy calls (diagnosis, triage) need a frontier model; verification calls are high-volume, low-complexity — cheaper tier. Cross-provider fallback ensures availability. |
+| DEC-19 | 2026-07 | `diagnosis_claim` gains a `claim_type` column (`part_number`\|`descriptive`, default `descriptive`; Alembic 0002) — a deviation from the original §5 DDL, which had no type column. Claim classification is deterministic regex (data-as-code, `verification/claims.py`), never an LLM call. | DEC-6 audit trail must record *which grounding threshold applied* to each claim; without the type, a persisted `grounded=true` at 0.8 is indistinguishable from one held to 1.0. Deterministic classifier keeps the safety-relevant routing auditable and free. |
 
 ---
 

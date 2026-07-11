@@ -57,6 +57,7 @@ class Claim(BaseModel):
 
     text: str
     grounded: bool | None = None
+    claim_type: Literal["part_number", "descriptive"] | None = None  # set by VERIFY (BL-6)
     supporting_evidence: list[EvidenceChunk] = Field(default_factory=list)
 
 

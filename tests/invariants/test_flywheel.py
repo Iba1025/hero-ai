@@ -17,12 +17,13 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hero.storage.models import Base, ContractorStatement
+from hero.storage.models import Base, ContractorStatement, DiagnosisClaim
 from hero.storage.repo import (
     create_contractor_statement,
     create_diagnosis,
     create_ticket,
     has_contractor_statement,
+    persist_diagnosis_from_state,
     update_ticket_status,
 )
 from tests.invariants.conftest import requires_docker
@@ -106,7 +107,7 @@ async def test_resolved_ticket_requires_contractor_statement(
         verify_pass=True,
         escalated=False,
         escalation_reason=None,
-        claims=[("Valve is leaking", True, {"doc_id": "m1", "page": 1})],
+        claims=[("Valve is leaking", "descriptive", True, {"doc_id": "m1", "page": 1})],
     )
     await db_session.commit()
 
@@ -142,7 +143,7 @@ async def test_unlabeled_reason_satisfies_flywheel(db_session: AsyncSession) -> 
         verify_pass=True,
         escalated=False,
         escalation_reason=None,
-        claims=[("Test claim", True, {"doc_id": "m1", "page": 1})],
+        claims=[("Test claim", "descriptive", True, {"doc_id": "m1", "page": 1})],
     )
     await db_session.commit()
 
@@ -156,6 +157,102 @@ async def test_unlabeled_reason_satisfies_flywheel(db_session: AsyncSession) -> 
     await db_session.commit()
     assert cs.id is not None
     assert cs.unlabeled_reason == "Contractor unreachable"
+
+
+@requires_docker
+@pytest.mark.asyncio
+async def test_persist_diagnosis_from_state_writes_claim_rows(db_session: AsyncSession) -> None:
+    """BL-6/DEC-6: per-claim results (text, type, grounded, evidence) round-trip
+    from final graph state into diagnosis_claim."""
+    from sqlalchemy import select
+
+    ticket = await create_ticket(
+        db_session,
+        org_id=uuid.uuid4(),
+        building_id=uuid.uuid4(),
+        description="Leaking P-trap",
+    )
+    await db_session.commit()
+
+    state = {
+        "verify_pass": False,
+        "escalated": False,
+        "escalation_reason": None,
+        "hypotheses": [
+            {
+                "fault": "Corroded P-trap joint",
+                "calibrated_confidence": 0.7,
+                "claims": [
+                    {
+                        "text": "The P-trap joint is corroded",
+                        "claim_type": "descriptive",
+                        "grounded": True,
+                        "supporting_evidence": [
+                            {
+                                "doc_id": "test-manual",
+                                "page": 0,
+                                "score": 0.99,
+                                "retrieval_stage": "reranked",
+                            }
+                        ],
+                    },
+                    {
+                        "text": "Order part PT-100-SS",
+                        "claim_type": "part_number",
+                        "grounded": False,
+                        "supporting_evidence": [],
+                    },
+                ],
+            }
+        ],
+    }
+
+    diag = await persist_diagnosis_from_state(
+        db_session, ticket_id=ticket.id, run_id="run-bl6", state=state
+    )
+    await db_session.commit()
+
+    assert diag is not None
+    assert diag.verify_pass is False
+
+    rows = (
+        (
+            await db_session.execute(
+                select(DiagnosisClaim).where(DiagnosisClaim.diagnosis_id == diag.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 2
+    by_text = {r.claim_text: r for r in rows}
+    descriptive = by_text["The P-trap joint is corroded"]
+    assert descriptive.claim_type == "descriptive"
+    assert descriptive.grounded is True
+    assert descriptive.evidence["chunks"][0]["doc_id"] == "test-manual"
+    part = by_text["Order part PT-100-SS"]
+    assert part.claim_type == "part_number"
+    assert part.grounded is False
+
+
+@requires_docker
+@pytest.mark.asyncio
+async def test_persist_diagnosis_noop_without_hypotheses(db_session: AsyncSession) -> None:
+    """CLARIFY-interrupted runs (no hypotheses yet) persist nothing."""
+    ticket = await create_ticket(
+        db_session,
+        org_id=uuid.uuid4(),
+        building_id=uuid.uuid4(),
+        description="Interrupted run",
+    )
+    await db_session.commit()
+    diag = await persist_diagnosis_from_state(
+        db_session,
+        ticket_id=ticket.id,
+        run_id="run-interrupted",
+        state={"hypotheses": [], "pending_question": "Which unit?"},
+    )
+    assert diag is None
 
 
 @requires_docker
@@ -177,7 +274,7 @@ async def test_verdict_or_reason_constraint_enforced(db_session: AsyncSession) -
         verify_pass=True,
         escalated=False,
         escalation_reason=None,
-        claims=[("Test claim", True, {"doc_id": "m1", "page": 1})],
+        claims=[("Test claim", "descriptive", True, {"doc_id": "m1", "page": 1})],
     )
     await db_session.commit()
 

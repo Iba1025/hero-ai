@@ -16,6 +16,10 @@
     "actual_fault": "Corroded P-trap joint",
     "verdict": "confirmed"
   },
+  "expected_claims": {
+    "min_grounding_rate": 0.8,
+    "note": "Claims about the P-trap leak should ground against the ingested fixture manual (--live); stub entailment is always-true so stub runs sit at 1.0"
+  },
   "expected_evidence": [
     {
       "doc_id": "test-manual",

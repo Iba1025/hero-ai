@@ -16,5 +16,9 @@
   "label": {
     "actual_fault": "Gas valve leak at furnace connection",
     "verdict": "confirmed"
+  },
+  "expected_claims": {
+    "min_grounding_rate": 0.0,
+    "note": "Gas tickets escalate on hard_category regardless of grounding (INV-1) — grounding rate is reported for audit, never gates the escalation"
   }
 }

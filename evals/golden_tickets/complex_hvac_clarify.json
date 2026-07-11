@@ -16,5 +16,9 @@
   "label": {
     "actual_fault": "Loose compressor mount bolts",
     "verdict": "partially_correct"
+  },
+  "expected_claims": {
+    "min_grounding_rate": 0.0,
+    "note": "No HVAC manual in the eval corpus yet — live grounding is expected to be low until an HVAC fixture is ingested; annotation exists so the per-type rates are reported"
   }
 }

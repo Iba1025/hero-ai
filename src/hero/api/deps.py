@@ -94,4 +94,5 @@ async def get_graph() -> Any:
         catalog=StubCatalogResolver(),
         checkpointer=checkpointer,
         grounding_threshold=settings.grounding_threshold,
+        grounding_threshold_strict=settings.grounding_threshold_strict,
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,8 +66,13 @@ async def create_diagnosis(
     verify_pass: bool,
     escalated: bool,
     escalation_reason: str | None,
-    claims: list[tuple[str, bool, dict[str, object]]],
+    claims: list[tuple[str, str, bool, dict[str, object]]],
 ) -> Diagnosis:
+    """Persist a diagnosis with its claim-level audit trail (DEC-6).
+
+    claims: (claim_text, claim_type, grounded, evidence) per claim — claim_type
+    records which grounding threshold applied (BL-6/DEC-19).
+    """
     diag = Diagnosis(
         ticket_id=ticket_id,
         run_id=run_id,
@@ -78,16 +84,64 @@ async def create_diagnosis(
     )
     session.add(diag)
     await session.flush()
-    for claim_text, grounded, evidence in claims:
+    for claim_text, claim_type, grounded, evidence in claims:
         claim = DiagnosisClaim(
             diagnosis_id=diag.id,
             claim_text=claim_text,
+            claim_type=claim_type,
             grounded=grounded,
             evidence=evidence,
         )
         session.add(claim)
     await session.flush()
     return diag
+
+
+async def persist_diagnosis_from_state(
+    session: AsyncSession,
+    *,
+    ticket_id: uuid.UUID,
+    run_id: str,
+    state: dict[str, Any],
+) -> Diagnosis | None:
+    """Persist the primary hypothesis + per-claim results from final graph state (BL-6).
+
+    Called by the API layer after a graph run completes — graph nodes never
+    touch the DB. Picks the hypothesis with the highest calibrated_confidence
+    (falls back to the first). Returns None when the run produced no hypotheses
+    (e.g. interrupted at CLARIFY).
+    """
+    hypotheses: list[dict[str, Any]] = state.get("hypotheses") or []
+    if not hypotheses:
+        return None
+
+    primary = max(
+        hypotheses,
+        key=lambda h: h.get("calibrated_confidence") or 0.0,
+    )
+
+    claims: list[tuple[str, str, bool, dict[str, object]]] = []
+    for claim in primary.get("claims", []):
+        claims.append(
+            (
+                claim.get("text", ""),
+                claim.get("claim_type") or "descriptive",
+                bool(claim.get("grounded")),
+                {"chunks": claim.get("supporting_evidence", [])},
+            )
+        )
+
+    return await create_diagnosis(
+        session,
+        ticket_id=ticket_id,
+        run_id=run_id,
+        fault=str(primary.get("fault", "")),
+        calibrated_confidence=primary.get("calibrated_confidence"),
+        verify_pass=bool(state.get("verify_pass")),
+        escalated=bool(state.get("escalated")),
+        escalation_reason=state.get("escalation_reason"),
+        claims=claims,
+    )
 
 
 async def get_diagnosis_for_ticket(session: AsyncSession, ticket_id: uuid.UUID) -> Diagnosis | None:

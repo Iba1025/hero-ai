@@ -72,6 +72,7 @@ def build_graph(
     catalog: CatalogResolver,
     checkpointer: BaseCheckpointSaver[Any],
     grounding_threshold: float = 0.8,
+    grounding_threshold_strict: float = 1.0,
     qdrant_client: Any | None = None,
 ) -> Any:
     """Assemble the full ticket pipeline graph.
@@ -84,7 +85,7 @@ def build_graph(
     triage_fn = make_triage(vlm)
     retrieve_fn = make_retrieve(embedder, reranker, qdrant_client=qdrant_client)
     diagnose_fn = make_diagnose(vlm)
-    verify_fn = make_verify(vlm, calibrator, grounding_threshold)
+    verify_fn = make_verify(vlm, calibrator, grounding_threshold, grounding_threshold_strict)
     procure_fn = make_procure(catalog)
 
     # Build the state graph
