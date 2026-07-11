@@ -171,7 +171,8 @@ class Claim(BaseModel):        # DEC-6: claim-level verification
 
 class Hypothesis(BaseModel):
     fault: str
-    claims: list[Claim]
+    claims: list[Claim]            # checkable against retrieved manual excerpts, cite [doc-id pN]
+    reasoning: list[str] = []      # world-knowledge / next steps — VERIFY does NOT gate these (P3-1.5)
     # NOTE: no `model_confidence` field, ever (INV-4).
     calibrated_confidence: Optional[float] = None   # set only by Calibrator
 
@@ -357,6 +358,10 @@ query → [BM25 index, top 25]                        ┘
 Per hypothesis: for each claim → classify → gather top evidence text
 (`EvidenceChunk.text` from the Qdrant payload, top-5 post-rerank) →
 `VLM.check_entailment(claim, evidence)` (VERIFY model tier, DEC-18) → `Claim.grounded`.
+DIAGNOSE receives the **same evidence excerpts** VERIFY entails against (P3-1.5) — claims
+cite them; `Hypothesis.reasoning` (world-knowledge/next steps) is **not** gated by VERIFY.
+Entailment calls fan out with `asyncio.gather` under a semaphore bounded at 5 concurrent,
+order-preserving. Zero hypotheses ⇒ `verify_pass = False` (never vacuously true).
 **Claim classifier (BL-6 ✅ / DEC-6):** deterministic regex in
 `verification/claims.py` (data-as-code, no LLM) tags each claim
 `part_number` or `descriptive`; per-type thresholds from config:
@@ -379,6 +384,8 @@ Pure deterministic functions. **No LLM calls in this module.**
 HARD_ESCALATE_TRADES = {"gas", "electrical_high_voltage", "structural", "water_intrusion"}
 
 def safety_gate(state: TicketState) -> SafetyDecision:
+    if state.escalation_reason == "diagnosis_unparseable":
+        return escalate("diagnosis_unparseable")  # set by DIAGNOSE on parse failure (P3-1.5)
     if state.trade in HARD_ESCALATE_TRADES: return escalate("hard_category")   # INV-1
     if not state.verify_pass:               return escalate("verification_failed")
     if any_hazard_keywords(state):          return escalate("hazard_signal")
@@ -411,6 +418,14 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
 - `golden_tickets/*.json`: real (anonymized) tickets with contractor-confirmed labels.
 - `run_eval.py` replays each through the graph with pinned adapters; reports:
   retrieval hit-rate@5, per-claim grounding rate, diagnosis accuracy vs label, ECE, cost/ticket, latency.
+- Cost is **measured**, not estimated: the LiteLLM adapter accumulates per-tier
+  `{calls, cost_usd, tokens}` (`drain_usage()`), reported per ticket and per run split by tier.
+  Per-node latency is timed from the graph's `astream(stream_mode="updates")` chunks.
+- `--runs N` repeats each ticket N times and reports mean/min/max grounding and cost —
+  primary-tier outputs are non-deterministic (model rejects `temperature`; DEC-20), so a
+  single run is a sample, not a measurement.
+- Live mode auto-ingests the fixture manuals (plumbing/HVAC/gas) so no trade's grounding
+  is structurally 0.00 for lack of corpus.
 - CI job runs evals on any change under `retrieval/`, `verification/`, `adapters/`, or prompt files.
   Regression > 2% on grounding rate or accuracy blocks merge.
 

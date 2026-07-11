@@ -19,6 +19,8 @@ from pathlib import Path
 import litellm
 
 from hero.graph.state import Claim, Hypothesis, TicketState
+from hero.interfaces.vlm import DiagnosisParseError
+from hero.verification.claims import gather_evidence_text
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,59 @@ _DECOMPOSE_PROMPT = _load_prompt("decompose_claims")
 _ENTAILMENT_PROMPT = _load_prompt("check_entailment")
 
 
+def parse_diagnosis(raw: str) -> list[Hypothesis]:
+    """Strictly parse a diagnosis response into hypotheses.
+
+    Raises DiagnosisParseError on any shape violation — never fabricates a
+    placeholder fault (P3-1.5). Module-level so tests can exercise it
+    without mocking LiteLLM.
+    """
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise DiagnosisParseError(f"diagnosis response is not valid JSON: {exc}") from exc
+
+    if isinstance(data, dict):
+        data = data.get("hypotheses")
+    if not isinstance(data, list) or not data:
+        raise DiagnosisParseError("diagnosis response has no hypotheses list")
+
+    hypotheses: list[Hypothesis] = []
+    for item in data:
+        if not isinstance(item, dict):
+            raise DiagnosisParseError(f"hypothesis is not an object: {item!r:.200}")
+        fault = item.get("fault")
+        if not isinstance(fault, str) or not fault.strip():
+            raise DiagnosisParseError("hypothesis missing non-empty 'fault'")
+
+        raw_claims = item.get("claims")
+        if not isinstance(raw_claims, list) or not raw_claims:
+            raise DiagnosisParseError(f"hypothesis {fault!r} missing non-empty 'claims' list")
+        claims: list[Claim] = []
+        for c in raw_claims:
+            text = c.get("text") if isinstance(c, dict) else c
+            if not isinstance(text, str) or not text.strip():
+                raise DiagnosisParseError(f"claim without text in hypothesis {fault!r}")
+            claims.append(Claim(text=text))
+
+        raw_reasoning = item.get("reasoning", [])
+        if not isinstance(raw_reasoning, list):
+            raise DiagnosisParseError(f"'reasoning' is not a list in hypothesis {fault!r}")
+        reasoning = [str(r) for r in raw_reasoning if str(r).strip()]
+
+        hypotheses.append(
+            Hypothesis(
+                fault=fault,
+                claims=claims,
+                reasoning=reasoning,
+                # INV-4: calibrated_confidence is NEVER set here.
+                # It is set only by the Calibrator after VERIFY.
+            )
+        )
+
+    return hypotheses
+
+
 class LiteLLMVLM:
     """VLM Protocol implementation using LiteLLM for tiered model routing.
 
@@ -61,6 +116,19 @@ class LiteLLMVLM:
         self._primary = primary_model
         self._verify = verify_model
         self._fallback = fallback_model
+        # Accumulated usage per tier since the last drain_usage() call.
+        # tier -> {"calls", "cost_usd", "prompt_tokens", "completion_tokens"}
+        self._usage: dict[str, dict[str, float]] = {}
+
+    def drain_usage(self) -> dict[str, dict[str, float]]:
+        """Return accumulated per-tier usage and reset the counters.
+
+        The eval harness calls this per ticket so cost/ticket is measured,
+        not reconstructed (P3-1.5 baseline finding: cost was hard-coded 0.0).
+        """
+        usage = self._usage
+        self._usage = {}
+        return usage
 
     async def _call(self, model: str, prompt: str, tier: str) -> str:
         """Call LiteLLM with fallback. Logs model and tier.
@@ -99,62 +167,52 @@ class LiteLLMVLM:
             self._log_cost(response, tier)
             return content
 
-    @staticmethod
-    def _log_cost(response: object, tier: str) -> None:
-        """Log LiteLLM-computed cost + token usage per call (baseline metrics)."""
+    def _log_cost(self, response: object, tier: str) -> None:
+        """Log and accumulate LiteLLM-computed cost + token usage per call."""
         try:
             cost = getattr(response, "_hidden_params", {}).get("response_cost")
             usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", None)
+            completion_tokens = getattr(usage, "completion_tokens", None)
             logger.info(
                 "[VLM-COST] tier=%s cost_usd=%s prompt_tokens=%s completion_tokens=%s",
                 tier,
                 cost,
-                getattr(usage, "prompt_tokens", None),
-                getattr(usage, "completion_tokens", None),
+                prompt_tokens,
+                completion_tokens,
             )
+            bucket = self._usage.setdefault(
+                tier,
+                {"calls": 0, "cost_usd": 0.0, "prompt_tokens": 0, "completion_tokens": 0},
+            )
+            bucket["calls"] += 1
+            bucket["cost_usd"] += float(cost or 0.0)
+            bucket["prompt_tokens"] += int(prompt_tokens or 0)
+            bucket["completion_tokens"] += int(completion_tokens or 0)
         except Exception:  # never let metrics logging break a call
             logger.debug("[VLM-COST] tier=%s cost unavailable", tier)
 
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:
-        """Form fault hypotheses — uses PRIMARY model (reasoning-heavy)."""
-        evidence_text = "\n".join(
-            f"[{e.doc_id} p{e.page}] (score={e.score:.2f})" for e in state.evidence
-        )
+        """Form fault hypotheses — uses PRIMARY model (reasoning-heavy).
+
+        The prompt receives real manual excerpts (same text VERIFY entails
+        against) so claims can cite them — not just doc-id/score lines,
+        which produced ungroundable meta-claims in the live baseline.
+
+        Raises DiagnosisParseError when the response does not parse into
+        the expected shape — the DIAGNOSE node escalates (P3-1.5).
+        """
+        evidence_text = gather_evidence_text([e.model_dump() for e in state.evidence])
 
         prompt = _render(
             _DIAGNOSE_PROMPT,
             description=state.description,
             trade=state.trade or "unknown",
-            evidence=evidence_text or "No evidence available",
+            evidence=evidence_text,
         )
 
         raw = await self._call(self._primary, prompt, "primary/diagnose")
-
-        try:
-            data = json.loads(raw)
-            if isinstance(data, dict) and "hypotheses" in data:
-                data = data["hypotheses"]
-            if not isinstance(data, list):
-                data = [data]
-        except json.JSONDecodeError:
-            data = [{"fault": raw.strip(), "claims": [{"text": raw.strip()}]}]
-
-        hypotheses: list[Hypothesis] = []
-        for item in data:
-            claims = [
-                Claim(text=c["text"] if isinstance(c, dict) else str(c))
-                for c in item.get("claims", [{"text": item.get("fault", "")}])
-            ]
-            hypotheses.append(
-                Hypothesis(
-                    fault=item.get("fault", "Unknown fault"),
-                    claims=claims,
-                    # INV-4: calibrated_confidence is NEVER set here.
-                    # It is set only by the Calibrator after VERIFY.
-                )
-            )
-
-        return hypotheses
+        return parse_diagnosis(raw)
 
     async def decompose_claims(self, hypothesis_text: str) -> list[str]:
         """Break hypothesis into verifiable claims — uses VERIFY model (cheaper)."""

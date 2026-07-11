@@ -19,6 +19,13 @@
   },
   "expected_claims": {
     "min_grounding_rate": 0.0,
-    "note": "Gas tickets escalate on hard_category regardless of grounding (INV-1) — grounding rate is reported for audit, never gates the escalation"
-  }
+    "note": "Gas tickets escalate on hard_category regardless of grounding (INV-1) — grounding never gates the escalation. tests/fixtures/test_gas_manual.pdf (doc_id=test-gas-manual) exists so the audited rate is meaningful, but the min stays 0.0: escalation must not depend on it."
+  },
+  "expected_evidence": [
+    {
+      "doc_id": "test-gas-manual",
+      "pages": [0, 2],
+      "note": "Gas valve chapter (p0) and safety chapter (p2) — requires --live retrieval with the fixture ingested"
+    }
+  ]
 }

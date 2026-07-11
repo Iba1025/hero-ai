@@ -5,8 +5,16 @@ Reports metrics per spec §10.2:
 - per-claim grounding rate
 - diagnosis accuracy vs label
 - ECE
-- cost/ticket (stub: $0)
-- latency
+- cost/ticket, split by model tier — measured from the VLM adapter's
+  accumulated LiteLLM usage (drain_usage), never hard-coded. Stub: $0.
+- latency: per ticket AND per node (time between graph stream updates —
+  includes checkpointer overhead per node)
+
+Repeatability: --runs N replays every ticket N times and reports
+mean/min/max on grounding rate and cost. Primary-tier model outputs are
+non-deterministic (DEC-20: newer Anthropic models reject the temperature
+param, so outputs cannot be pinned) — single-run numbers are samples,
+not point estimates.
 
 Adapter modes:
 - default (CI): stub adapters — no API keys, no model downloads, no Qdrant.
@@ -49,6 +57,46 @@ def load_golden_tickets() -> list[dict[str, Any]]:
     """Load all golden ticket JSON files."""
     tickets_dir = Path(__file__).parent / "golden_tickets"
     return [json.loads(p.read_text()) for p in sorted(tickets_dir.glob("*.json"))]
+
+
+# (doc_id, pdf_path, manufacturer, model_codes) — one fixture manual per trade
+# in the golden set, so grounding is a metric that can actually move (P3-1.5).
+_FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
+FIXTURE_MANUALS = [
+    ("test-manual", _FIXTURES_DIR / "test_plumbing_manual.pdf", "ACME", ["PL-2000"]),
+    ("test-hvac-manual", _FIXTURES_DIR / "test_hvac_manual.pdf", "ACME", ["AC-3000"]),
+    ("test-gas-manual", _FIXTURES_DIR / "test_gas_manual.pdf", "ACME", ["GF-8000"]),
+]
+
+
+def _ensure_fixtures_ingested(client: Any, embedder: Any) -> None:
+    """Ingest any fixture manual missing from the Qdrant collection (--live)."""
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    from hero.ingestion.ingest import COLLECTION_NAME, ingest_pdf
+
+    collection_exists = COLLECTION_NAME in [c.name for c in client.get_collections().collections]
+    for doc_id, pdf_path, manufacturer, model_codes in FIXTURE_MANUALS:
+        if collection_exists:
+            existing = client.count(
+                COLLECTION_NAME,
+                count_filter=Filter(
+                    must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+                ),
+                exact=True,
+            ).count
+            if existing > 0:
+                continue
+        print(f"[QDRANT] ingesting fixture {doc_id!r} from {pdf_path.name}...")
+        ingest_pdf(
+            pdf_path=str(pdf_path),
+            doc_id=doc_id,
+            manufacturer=manufacturer,
+            model_codes=model_codes,
+            embedder=embedder,
+            client=client,
+        )
+        collection_exists = True
 
 
 async def _make_checkpointer() -> Any:
@@ -110,8 +158,11 @@ def _make_adapters(live: bool) -> dict[str, Any]:
             "--live requires ANTHROPIC_API_KEY and/or OPENAI_API_KEY in the environment/.env"
         )
 
-    client = QdrantClient(url=settings.qdrant_url, timeout=10)
+    client = QdrantClient(url=settings.qdrant_url, timeout=30)
     client.get_collections()  # fail loudly if Qdrant unreachable
+
+    embedder = ColModernVBertEmbedder()
+    _ensure_fixtures_ingested(client, embedder)
 
     print(
         f"[ADAPTERS] live (VLM=LiteLLMVLM primary={settings.vlm_model_primary} "
@@ -119,7 +170,7 @@ def _make_adapters(live: bool) -> dict[str, Any]:
         f"embedder=ColModernVBERT, reranker=BGE, qdrant={settings.qdrant_url})"
     )
     return {
-        "embedder": ColModernVBertEmbedder(),
+        "embedder": embedder,
         "reranker": BGEReranker(),
         "vlm": LiteLLMVLM(
             primary_model=settings.vlm_model_primary,
@@ -143,8 +194,33 @@ def _build_graph(checkpointer: Any, adapters: dict[str, Any]) -> Any:
     )
 
 
+async def _stream_collect(
+    graph: Any,
+    payload: Any,
+    config: dict[str, Any],
+    node_latency: dict[str, float],
+) -> dict[str, Any]:
+    """Drive the graph via astream(updates) recording per-node wall time.
+
+    Per-node latency = time between successive update events; it includes
+    per-node checkpointer overhead. Final state read back via aget_state.
+    """
+    t_prev = time.monotonic()
+    async for chunk in graph.astream(payload, config=config, stream_mode="updates"):
+        now = time.monotonic()
+        for node in chunk:
+            if not node.startswith("__"):  # skip __interrupt__ marker
+                node_latency[node] = node_latency.get(node, 0.0) + (now - t_prev)
+        t_prev = now
+    state = await graph.aget_state(config)
+    return dict(state.values)
+
+
 async def run_ticket(
-    checkpointer: Any, ticket: dict[str, Any], adapters: dict[str, Any]
+    checkpointer: Any,
+    ticket: dict[str, Any],
+    adapters: dict[str, Any],
+    run_idx: int = 0,
 ) -> dict[str, Any]:
     """Run a single golden ticket through the graph, handling CLARIFY if needed.
 
@@ -154,7 +230,7 @@ async def run_ticket(
     """
     ticket_id = ticket["ticket_id"]
     expected = ticket["expected"]
-    thread_id = f"eval-{ticket_id}"
+    thread_id = f"eval-{ticket_id}-r{run_idx}"
     config = {"configurable": {"thread_id": thread_id}}
 
     input_state: dict[str, Any] = {
@@ -167,11 +243,17 @@ async def run_ticket(
     if expected.get("requires_clarify"):
         input_state["pending_question"] = "Can you provide more details?"
 
+    # Reset the adapter's usage counters so cost is attributed per ticket.
+    drain = getattr(adapters["vlm"], "drain_usage", None)
+    if callable(drain):
+        drain()
+
+    node_latency: dict[str, float] = {}
     start = time.monotonic()
 
     # --- First graph instance ---
     graph1 = _build_graph(checkpointer, adapters)
-    result = await graph1.ainvoke(input_state, config=config)
+    result = await _stream_collect(graph1, input_state, config, node_latency)
 
     # If CLARIFY interrupted, simulate process restart
     if expected.get("requires_clarify") and result.get("pending_question"):
@@ -195,15 +277,20 @@ async def run_ticket(
         # Resume with clarification answer
         clarify_answer = expected.get("clarify_answer", "No additional details")
         print(f"  [CLARIFY] Resuming with answer: {clarify_answer!r}")
-        result = await graph2.ainvoke(Command(resume=clarify_answer), config=config)
+        result = await _stream_collect(graph2, Command(resume=clarify_answer), config, node_latency)
         print(f"  [CLARIFY] Resumed successfully. clarify_rounds={result.get('clarify_rounds')}")
 
     elapsed = time.monotonic() - start
+
+    # Real per-tier usage accumulated by the adapter during this ticket.
+    cost_by_tier: dict[str, dict[str, float]] = drain() if callable(drain) else {}
 
     return {
         "ticket_id": ticket_id,
         "result": result,
         "elapsed_s": elapsed,
+        "node_latency": node_latency,
+        "cost_by_tier": cost_by_tier,
         "expected": expected,
         "expected_evidence": ticket.get("expected_evidence"),
         "expected_claims": ticket.get("expected_claims"),
@@ -286,8 +373,12 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
         )
     else:
         checks["retrieval_hit_rate_at_5"] = None
-    checks["cost_usd"] = 0.0
+    # Measured cost from the adapter's LiteLLM usage (P3-1.5) — $0 for stubs.
+    cost_by_tier = run_result.get("cost_by_tier", {})
+    checks["cost_by_tier"] = cost_by_tier
+    checks["cost_usd"] = sum(t["cost_usd"] for t in cost_by_tier.values())
     checks["latency_s"] = run_result["elapsed_s"]
+    checks["node_latency_s"] = run_result.get("node_latency", {})
 
     critical_checks = [
         checks.get("escalation_correct", False),
@@ -307,6 +398,13 @@ async def main() -> int:
         help="Use real adapters (LiteLLMVLM + ColModernVBERT + BGE + Qdrant). "
         "Local only — requires API keys, model downloads, ingested Qdrant. Never in CI.",
     )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Replay every ticket N times and report mean/min/max on grounding "
+        "and cost. Primary-tier outputs are non-deterministic (DEC-20).",
+    )
     args = parser.parse_args()
 
     tickets = load_golden_tickets()
@@ -314,48 +412,68 @@ async def main() -> int:
     adapters = _make_adapters(live=args.live)
 
     print(f"\n{'=' * 70}")
-    print(f"Hero.AI Eval — {len(tickets)} golden tickets (mode={'LIVE' if args.live else 'stub'})")
+    print(
+        f"Hero.AI Eval — {len(tickets)} golden tickets "
+        f"(mode={'LIVE' if args.live else 'stub'}, runs={args.runs})"
+    )
     print(f"{'=' * 70}\n")
 
     all_results: list[dict[str, Any]] = []
     all_pass = True
 
-    for ticket in tickets:
-        run_result = await run_ticket(checkpointer, ticket, adapters)
-        checks = evaluate(run_result)
-        result = run_result["result"]
-        all_results.append({"ticket_id": ticket["ticket_id"], **checks})
+    for run_idx in range(args.runs):
+        if args.runs > 1:
+            print(f"----- run {run_idx + 1}/{args.runs} -----")
+        for ticket in tickets:
+            run_result = await run_ticket(checkpointer, ticket, adapters, run_idx=run_idx)
+            checks = evaluate(run_result)
+            result = run_result["result"]
+            all_results.append({"ticket_id": ticket["ticket_id"], "run": run_idx, **checks})
 
-        status = "PASS" if checks["pass"] else "FAIL"
-        if not checks["pass"]:
-            all_pass = False
+            status = "PASS" if checks["pass"] else "FAIL"
+            if not checks["pass"]:
+                all_pass = False
 
-        print(f"[{status}] {ticket['ticket_id']}: {ticket['description'][:50]}...")
-        print(
-            f"  trade={result.get('trade')} "
-            f"urgency={result.get('urgency')} "
-            f"escalated={result.get('escalated')} "
-            f"escalation_reason={result.get('escalation_reason')}"
-        )
-        print(
-            f"  verify_pass={result.get('verify_pass')} "
-            f"work_order_id={result.get('work_order_id') is not None} "
-            f"sku={result.get('sku') is not None}"
-        )
-        print(
-            f"  grounding_rate={checks['grounding_rate']} "
-            f"by_type={checks['grounding_rate_by_type']} "
-            f"claims={checks['claim_counts_by_type']} "
-            f"meets_min={checks['claim_grounding_meets_min']}"
-        )
-        print(
-            f"  retrieval@5={checks['retrieval_hit_rate_at_5']} latency={checks['latency_s']:.3f}s"
-        )
+            print(f"[{status}] {ticket['ticket_id']}: {ticket['description'][:50]}...")
+            print(
+                f"  trade={result.get('trade')} "
+                f"urgency={result.get('urgency')} "
+                f"escalated={result.get('escalated')} "
+                f"escalation_reason={result.get('escalation_reason')}"
+            )
+            print(
+                f"  verify_pass={result.get('verify_pass')} "
+                f"work_order_id={result.get('work_order_id') is not None} "
+                f"sku={result.get('sku') is not None}"
+            )
+            print(
+                f"  grounding_rate={checks['grounding_rate']} "
+                f"by_type={checks['grounding_rate_by_type']} "
+                f"claims={checks['claim_counts_by_type']} "
+                f"meets_min={checks['claim_grounding_meets_min']}"
+            )
+            print(
+                f"  retrieval@5={checks['retrieval_hit_rate_at_5']} "
+                f"latency={checks['latency_s']:.3f}s "
+                f"cost=${checks['cost_usd']:.4f}"
+            )
+            if checks["cost_by_tier"]:
+                for tier, usage in sorted(checks["cost_by_tier"].items()):
+                    print(
+                        f"    cost[{tier}]: ${usage['cost_usd']:.4f} "
+                        f"({usage['calls']:.0f} calls, "
+                        f"{usage['prompt_tokens']:.0f}/{usage['completion_tokens']:.0f} tok)"
+                    )
+            if checks["node_latency_s"]:
+                node_parts = " ".join(
+                    f"{node}={t:.2f}s" for node, t in checks["node_latency_s"].items()
+                )
+                print(f"    nodes: {node_parts}")
 
-        if not checks["pass"]:
-            failed = {k: v for k, v in checks.items() if v is False and k != "pass"}
-            print(f"  FAILED checks: {failed}")
-        print()
+            if not checks["pass"]:
+                failed = {k: v for k, v in checks.items() if v is False and k != "pass"}
+                print(f"  FAILED checks: {failed}")
+            print()
 
     # Summary
     passed = sum(1 for r in all_results if r["pass"])
@@ -363,6 +481,47 @@ async def main() -> int:
     print(f"Results: {passed}/{len(all_results)} passed")
     avg_latency = sum(r["latency_s"] for r in all_results) / len(all_results)
     print(f"Avg latency: {avg_latency:.3f}s")
+
+    # Per-node latency averaged across all ticket runs (P3-1.5).
+    node_totals: dict[str, list[float]] = {}
+    for r in all_results:
+        for node, t in r.get("node_latency_s", {}).items():
+            node_totals.setdefault(node, []).append(t)
+    if node_totals:
+        parts = " ".join(f"{n}={sum(ts) / len(ts):.2f}s" for n, ts in node_totals.items())
+        print(f"Avg latency per node: {parts}")
+
+    # Cost: total for the whole eval run, split by tier (P3-1.5).
+    total_cost = sum(r["cost_usd"] for r in all_results)
+    tier_costs: dict[str, float] = {}
+    for r in all_results:
+        for tier, usage in r.get("cost_by_tier", {}).items():
+            tier_costs[tier] = tier_costs.get(tier, 0.0) + usage["cost_usd"]
+    print(f"Total run cost: ${total_cost:.4f}", end="")
+    if tier_costs:
+        split = " ".join(f"{t}=${c:.4f}" for t, c in sorted(tier_costs.items()))
+        print(f" ({split})")
+    else:
+        print()
+    if len(all_results) > 0:
+        print(f"Avg cost/ticket: ${total_cost / len(all_results):.4f}")
+
+    # Spread across repeated runs (DEC-20: primary tier is non-deterministic).
+    if args.runs > 1:
+        print(f"\nSpread over {args.runs} runs (DEC-20 — mean/min/max):")
+        by_ticket: dict[str, list[dict[str, Any]]] = {}
+        for r in all_results:
+            by_ticket.setdefault(r["ticket_id"], []).append(r)
+        for ticket_id, rs in sorted(by_ticket.items()):
+            g = [r["grounding_rate"] for r in rs if r["grounding_rate"] is not None]
+            c = [r["cost_usd"] for r in rs]
+            if g:
+                g_str = f"grounding {sum(g) / len(g):.2f}/{min(g):.2f}/{max(g):.2f}"
+            else:
+                g_str = "grounding n/a"
+            print(
+                f"  {ticket_id}: {g_str}  cost ${sum(c) / len(c):.4f}/${min(c):.4f}/${max(c):.4f}"
+            )
     avg_grounding = [r["grounding_rate"] for r in all_results if r["grounding_rate"] is not None]
     if avg_grounding:
         print(f"Avg grounding rate: {sum(avg_grounding) / len(avg_grounding):.2f}")

@@ -35,7 +35,13 @@ from hero.verification.claims import gather_evidence_text
 
 ROOT = Path(__file__).parent.parent
 TICKET_PATH = ROOT / "evals" / "golden_tickets" / "simple_plumbing.json"
-TEST_PDF = str(ROOT / "tests" / "fixtures" / "test_plumbing_manual.pdf")
+
+# (doc_id, pdf_path, manufacturer, model_codes) — one per trade in the golden set.
+FIXTURE_MANUALS = [
+    ("test-manual", ROOT / "tests" / "fixtures" / "test_plumbing_manual.pdf", "ACME", ["PL-2000"]),
+    ("test-hvac-manual", ROOT / "tests" / "fixtures" / "test_hvac_manual.pdf", "ACME", ["AC-3000"]),
+    ("test-gas-manual", ROOT / "tests" / "fixtures" / "test_gas_manual.pdf", "ACME", ["GF-8000"]),
+]
 
 
 class TracingVLM:
@@ -66,21 +72,36 @@ class TracingVLM:
 
 
 def _ensure_ingested(client: QdrantClient, embedder: Any) -> None:
+    """Ingest any fixture manual whose doc_id is missing from the collection."""
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
     collections = [c.name for c in client.get_collections().collections]
-    if COLLECTION_NAME in collections:
-        print(f"[QDRANT] collection {COLLECTION_NAME!r} exists — reusing")
-        return
-    print(f"[QDRANT] ingesting fixture {TEST_PDF} with real embedder...")
-    t0 = time.monotonic()
-    count = ingest_pdf(
-        pdf_path=TEST_PDF,
-        doc_id="test-manual",
-        manufacturer="ACME",
-        model_codes=["PL-2000"],
-        embedder=embedder,
-        client=client,
-    )
-    print(f"[QDRANT] ingested {count} pages in {time.monotonic() - t0:.1f}s")
+    collection_exists = COLLECTION_NAME in collections
+
+    for doc_id, pdf_path, manufacturer, model_codes in FIXTURE_MANUALS:
+        if collection_exists:
+            existing = client.count(
+                COLLECTION_NAME,
+                count_filter=Filter(
+                    must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+                ),
+                exact=True,
+            ).count
+            if existing > 0:
+                print(f"[QDRANT] {doc_id!r} already ingested ({existing} pages) — reusing")
+                continue
+        print(f"[QDRANT] ingesting fixture {pdf_path} with real embedder...")
+        t0 = time.monotonic()
+        count = ingest_pdf(
+            pdf_path=str(pdf_path),
+            doc_id=doc_id,
+            manufacturer=manufacturer,
+            model_codes=model_codes,
+            embedder=embedder,
+            client=client,
+        )
+        collection_exists = True
+        print(f"[QDRANT] ingested {doc_id!r}: {count} pages in {time.monotonic() - t0:.1f}s")
 
 
 async def main() -> int:

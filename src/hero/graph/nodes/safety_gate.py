@@ -13,6 +13,11 @@ from hero.safety.gate import safety_check
 
 def safety_gate(state: dict[str, Any]) -> dict[str, Any]:
     """Run the deterministic safety gate. Confidence is NOT an input (INV-1)."""
+    # DIAGNOSE escalated because its output was unparseable (P3-1.5) —
+    # preserve that reason; there are no hypotheses to re-evaluate.
+    if state.get("escalated") and state.get("escalation_reason") == "diagnosis_unparseable":
+        return {"escalated": True, "escalation_reason": "diagnosis_unparseable"}
+
     trade = state.get("trade")
     verify_pass = state.get("verify_pass", False)
     description = state.get("description", "")

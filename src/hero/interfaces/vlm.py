@@ -10,6 +10,15 @@ from typing import Protocol, runtime_checkable
 from hero.graph.state import Hypothesis, TicketState
 
 
+class DiagnosisParseError(Exception):
+    """Raised when a diagnosis response cannot be parsed into hypotheses.
+
+    The DIAGNOSE node escalates with reason `diagnosis_unparseable` —
+    a placeholder fault must never be emitted (P3-1.5, baseline finding:
+    the gpt-4o fallback produced 'Unknown fault' from unparseable JSON).
+    """
+
+
 @runtime_checkable
 class VLM(Protocol):
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:

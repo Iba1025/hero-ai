@@ -1,0 +1,79 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 6 0 R 9 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 248 >>
+stream
+BT /F1 12 Tf 72 720 Td
+(ACME Furnace Manual - Model GF-8000
+Chapter 1: Gas Valve
+Part Number: GV-220-NG gas valve
+The gas valve regulates flow to the burner assembly.
+Leak-test all valve connections with soap solution after service.) Tj 0 -20 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 8 0 R >> >> >>
+endobj
+7 0 obj
+<< /Length 200 >>
+stream
+BT /F1 12 Tf 72 720 Td
+(Chapter 2: Ignition System
+Part Number: IG-750-SI silicon nitride igniter
+Replace igniter IG-750-SI if the burner fails to light.
+Never bypass the flame sensor.) Tj 0 -20 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 10 0 R /Resources << /Font << /F1 11 0 R >> >> >>
+endobj
+10 0 obj
+<< /Length 274 >>
+stream
+BT /F1 12 Tf 72 720 Td
+(Chapter 3: Safety
+Gas odor detected: evacuate the area, shut off the gas supply valve,
+and ventilate. Do not operate electrical switches.
+Leak at furnace connection: inspect gas valve GV-220-NG fittings
+and re-test with soap solution.) Tj 0 -20 Td
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000552 00000 n 
+0000000622 00000 n 
+0000000748 00000 n 
+0000000999 00000 n 
+0000001069 00000 n 
+0000001197 00000 n 
+0000001523 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+1594
+%%EOF

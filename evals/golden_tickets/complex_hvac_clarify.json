@@ -18,7 +18,14 @@
     "verdict": "partially_correct"
   },
   "expected_claims": {
-    "min_grounding_rate": 0.0,
-    "note": "No HVAC manual in the eval corpus yet — live grounding is expected to be low until an HVAC fixture is ingested; annotation exists so the per-type rates are reported"
-  }
+    "min_grounding_rate": 0.5,
+    "note": "tests/fixtures/test_hvac_manual.pdf (doc_id=test-hvac-manual) covers rattling outdoor unit -> loose compressor mount bolts CM-450-BK; claims should ground against it in --live. Reported, not run-blocking."
+  },
+  "expected_evidence": [
+    {
+      "doc_id": "test-hvac-manual",
+      "pages": [0, 2],
+      "note": "Condenser chapter (p0) and troubleshooting (p2) both cover the rattling-outdoor-unit fault — requires --live retrieval with the fixture ingested"
+    }
+  ]
 }

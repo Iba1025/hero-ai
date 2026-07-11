@@ -14,11 +14,16 @@ Entailment calls go through VLM.check_entailment — the VERIFY model tier (DEC-
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from hero.interfaces.calibrator import Calibrator
 from hero.interfaces.vlm import VLM
 from hero.verification.claims import classify_claim, gather_evidence_text
+
+# Entailment calls are independent — run them concurrently, bounded so a
+# many-claim diagnosis cannot stampede the provider (P3-1.5).
+_MAX_CONCURRENT_ENTAILMENTS = 5
 
 
 def _strip_text(chunk: dict[str, Any]) -> dict[str, Any]:
@@ -43,8 +48,22 @@ def make_verify(
         evidence_text = gather_evidence_text(evidence)
         claim_evidence = [_strip_text(c) for c in evidence[:5]]
 
+        # All entailment checks are independent of each other — fire them
+        # concurrently under a bounded semaphore, keeping claim order.
+        semaphore = asyncio.Semaphore(_MAX_CONCURRENT_ENTAILMENTS)
+
+        async def check(claim_text: str) -> bool:
+            async with semaphore:
+                return await vlm.check_entailment(claim_text, evidence_text)
+
+        all_claim_texts = [
+            claim.get("text", "") for hyp in hypotheses for claim in hyp.get("claims", [])
+        ]
+        verdicts = iter(await asyncio.gather(*(check(t) for t in all_claim_texts)))
+
         updated_hypotheses = []
-        overall_pass = True
+        # No hypotheses (e.g. diagnosis_unparseable) → nothing verified → fail.
+        overall_pass = len(hypotheses) > 0
 
         for hyp in hypotheses:
             claims = hyp.get("claims", [])
@@ -54,7 +73,7 @@ def make_verify(
             for claim in claims:
                 claim_text = claim.get("text", "")
                 claim_type = classify_claim(claim_text)
-                is_grounded = await vlm.check_entailment(claim_text, evidence_text)
+                is_grounded = next(verdicts)
 
                 grounded_n, total_n = counts.get(claim_type, [0, 0])
                 counts[claim_type] = [grounded_n + int(is_grounded), total_n + 1]

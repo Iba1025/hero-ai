@@ -64,6 +64,9 @@ class Claim(BaseModel):
 class Hypothesis(BaseModel):
     fault: str
     claims: list[Claim]
+    # World-knowledge inferences / recommended next steps from DIAGNOSE.
+    # Carried for the contractor; VERIFY does NOT gate on these (P3-1.5).
+    reasoning: list[str] = Field(default_factory=list)
     # NOTE: no `model_confidence` field, ever (INV-4).
     calibrated_confidence: float | None = None  # set only by Calibrator
 
