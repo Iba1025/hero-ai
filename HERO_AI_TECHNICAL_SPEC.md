@@ -105,6 +105,8 @@ hero/
 ├── evals/                         # BL-3 regression suite (§10)
 │   ├── golden_tickets/            # labeled ticket fixtures (JSON)
 │   └── run_eval.py
+├── web/                           # P4-2 cockpit SPA (Vite + React + TS, dependency-light)
+│   └── src/                       # screens/: Login, TicketList, Outcome (contractor front door)
 └── tests/
     ├── unit/
     ├── integration/

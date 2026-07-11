@@ -15,7 +15,9 @@ from hero.storage.repo import (
 )
 from hero.storage.repo import (
     get_ticket_for_org,
+    list_tickets_for_org,
     persist_diagnosis_from_state,
+    stamp_ticket_triage,
     update_ticket_status,
 )
 
@@ -38,6 +40,18 @@ class CreateTicketResponse(BaseModel):
 
 class ClarifyAnswerRequest(BaseModel):
     answer: str
+
+
+class TicketSummary(BaseModel):
+    """List-view row (P4-2) — served from the ticket table, no checkpointer read."""
+
+    ticket_id: str
+    description: str
+    status: str
+    trade: str | None = None
+    urgency: str | None = None
+    complexity: str | None = None
+    created_at: str
 
 
 class TicketStatusResponse(BaseModel):
@@ -91,6 +105,14 @@ async def create_ticket(
 
     # Per-claim results → diagnosis_claim (BL-6). No-op while CLARIFY-interrupted.
     await persist_diagnosis_from_state(session, ticket_id=ticket.id, run_id=thread_id, state=result)
+    # Triage runs before any CLARIFY interrupt, so trade/urgency are final here (P4-2).
+    await stamp_ticket_triage(
+        session,
+        ticket.id,
+        trade=result.get("trade"),
+        urgency=result.get("urgency"),
+        complexity=result.get("complexity"),
+    )
     await update_ticket_status(session, ticket.id, status)
     await session.commit()
 
@@ -99,6 +121,27 @@ async def create_ticket(
         thread_id=thread_id,
         status=status,
     )
+
+
+@router.get("", response_model=list[TicketSummary])
+async def list_tickets(
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(get_current_user),  # noqa: B008
+) -> list[TicketSummary]:
+    """Org-scoped ticket list (P4-2 cockpit). Any authenticated role."""
+    tickets = await list_tickets_for_org(session, user.org_id)
+    return [
+        TicketSummary(
+            ticket_id=str(t.id),
+            description=t.description,
+            status=t.status,
+            trade=t.trade,
+            urgency=t.urgency,
+            complexity=t.complexity,
+            created_at=t.created_at.isoformat(),
+        )
+        for t in tickets
+    ]
 
 
 @router.get("/{ticket_id}", response_model=TicketStatusResponse)

@@ -48,6 +48,38 @@ async def get_ticket_for_org(
     return result.scalar_one_or_none()
 
 
+async def list_tickets_for_org(
+    session: AsyncSession, org_id: uuid.UUID, *, limit: int = 100
+) -> list[Ticket]:
+    """Org-scoped ticket list (P4-2 cockpit), newest first. Same rule as
+    get_ticket_for_org: the org filter lives in the query."""
+    result = await session.execute(
+        select(Ticket)
+        .where(Ticket.org_id == org_id)
+        .order_by(Ticket.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def stamp_ticket_triage(
+    session: AsyncSession,
+    ticket_id: uuid.UUID,
+    *,
+    trade: str | None,
+    urgency: str | None,
+    complexity: str | None,
+) -> None:
+    """Copy triage fields from final graph state onto the ticket row (P4-2)
+    so list views don't need a checkpointer read per ticket."""
+    ticket = await session.get(Ticket, ticket_id)
+    if ticket is not None:
+        ticket.trade = trade
+        ticket.urgency = urgency
+        ticket.complexity = complexity
+        await session.flush()
+
+
 async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
     result = await session.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
