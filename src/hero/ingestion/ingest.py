@@ -32,6 +32,11 @@ from hero.interfaces.embedder import Embedder
 
 COLLECTION_NAME = "manuals"
 
+# Bump whenever tokenization/indexing changes incompatibly (tokenizer regex,
+# stable_token_index scheme, payload schema). Stamped on every point at
+# ingestion; retrieval/integrity.py fails loudly on mismatch (P3-4 canary).
+TOKENIZER_VERSION = "sha1-tf-v1"
+
 
 def _extract_page_text(pdf_path: str, page_idx: int) -> str:
     """Extract text from a single PDF page."""
@@ -183,6 +188,7 @@ def ingest_pdf(
                         "manufacturer": manufacturer,
                         "model_codes": model_codes,
                         "text": text,  # stored for reranker input
+                        "tokenizer_version": TOKENIZER_VERSION,  # integrity canary
                     },
                 )
             )

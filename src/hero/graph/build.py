@@ -27,6 +27,7 @@ from hero.interfaces.catalog import CatalogResolver
 from hero.interfaces.embedder import Embedder
 from hero.interfaces.reranker import Reranker
 from hero.interfaces.vlm import VLM
+from hero.observability import traced_node
 
 
 def _route_after_triage(state: dict[str, Any]) -> str:
@@ -101,18 +102,19 @@ def build_graph(
     # Build the state graph
     graph = StateGraph(GraphState)
 
-    # Add all nodes
-    graph.add_node("intake", intake)
-    graph.add_node("triage", triage_fn)
-    graph.add_node("retrieve", retrieve_fn)
-    graph.add_node("retrieve_fast", retrieve_fast_fn)  # BL-4 fast path
-    graph.add_node("clarify", clarify)
-    graph.add_node("diagnose", diagnose_fn)
-    graph.add_node("verify", verify_fn)
-    graph.add_node("safety_gate", safety_gate)
-    graph.add_node("resolve", resolve)
-    graph.add_node("procure", procure_fn)
-    graph.add_node("outcome", outcome)
+    # Add all nodes — each wrapped in a Langfuse span (spec §11; no-op
+    # passthrough when Langfuse is not configured).
+    graph.add_node("intake", traced_node("intake", intake))
+    graph.add_node("triage", traced_node("triage", triage_fn))
+    graph.add_node("retrieve", traced_node("retrieve", retrieve_fn))
+    graph.add_node("retrieve_fast", traced_node("retrieve_fast", retrieve_fast_fn))  # BL-4
+    graph.add_node("clarify", traced_node("clarify", clarify))
+    graph.add_node("diagnose", traced_node("diagnose", diagnose_fn))
+    graph.add_node("verify", traced_node("verify", verify_fn))
+    graph.add_node("safety_gate", traced_node("safety_gate", safety_gate))
+    graph.add_node("resolve", traced_node("resolve", resolve))
+    graph.add_node("procure", traced_node("procure", procure_fn))
+    graph.add_node("outcome", traced_node("outcome", outcome))
 
     # Wire edges
     # START → INTAKE → TRIAGE

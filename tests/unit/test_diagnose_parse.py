@@ -91,9 +91,18 @@ def test_parse_never_emits_placeholder_fault() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _UnparseableVLM:
+class _FlakyParseVLM:
+    """diagnose() raises DiagnosisParseError for the first `fail_times` calls."""
+
+    def __init__(self, fail_times: int) -> None:
+        self.fail_times = fail_times
+        self.calls = 0
+
     async def diagnose(self, state: TicketState) -> Any:
-        raise DiagnosisParseError("bad shape")
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise DiagnosisParseError("bad shape")
+        return parse_diagnosis(json.dumps([{"fault": "f", "claims": [{"text": "c"}]}]))
 
     async def decompose_claims(self, hypothesis_text: str) -> list[str]:
         return []
@@ -103,12 +112,36 @@ class _UnparseableVLM:
 
 
 @pytest.mark.asyncio
-async def test_diagnose_node_escalates_on_parse_error() -> None:
-    node = make_diagnose(_UnparseableVLM())
+async def test_diagnose_node_escalates_after_retry_also_fails() -> None:
+    """Both attempts unparseable → diagnosis_unparseable, exactly 2 calls (P3-4)."""
+    vlm = _FlakyParseVLM(fail_times=2)
+    node = make_diagnose(vlm)
     result = await node({"ticket_id": "t-1", "description": "leak"})
+    assert vlm.calls == 2
     assert result["hypotheses"] == []
     assert result["escalated"] is True
     assert result["escalation_reason"] == "diagnosis_unparseable"
+
+
+@pytest.mark.asyncio
+async def test_diagnose_node_retry_recovers_from_one_parse_failure() -> None:
+    """First attempt unparseable, retry parses → hypotheses, no escalation (P3-4)."""
+    vlm = _FlakyParseVLM(fail_times=1)
+    node = make_diagnose(vlm)
+    result = await node({"ticket_id": "t-1", "description": "leak"})
+    assert vlm.calls == 2
+    assert result.get("escalated") is None
+    assert len(result["hypotheses"]) == 1
+    assert result["hypotheses"][0]["fault"] == "f"
+
+
+@pytest.mark.asyncio
+async def test_diagnose_node_no_retry_when_first_parse_succeeds() -> None:
+    vlm = _FlakyParseVLM(fail_times=0)
+    node = make_diagnose(vlm)
+    result = await node({"ticket_id": "t-1", "description": "leak"})
+    assert vlm.calls == 1
+    assert len(result["hypotheses"]) == 1
 
 
 def test_safety_gate_preserves_diagnosis_unparseable() -> None:

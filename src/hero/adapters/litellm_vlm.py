@@ -133,10 +133,16 @@ class LiteLLMVLM:
         primary_model: str = "claude-fable-5",
         verify_model: str = "claude-sonnet-4-6",
         fallback_model: str = "gpt-4o",
+        triage_model: str = "",
     ) -> None:
         self._primary = primary_model
         self._verify = verify_model
         self._fallback = fallback_model
+        # Empty = triage on the verify tier (DEC-18 as amended 2026-07 after
+        # the P3-4 experiment: sonnet triage matched fable on routing quality
+        # at ~1/3 the latency and cost, with zero run-to-run flips). Non-empty
+        # overrides explicitly; DEC-21 fail-safes are model-agnostic.
+        self._triage = triage_model or verify_model
         # Accumulated usage per tier since the last drain_usage() call.
         # tier -> {"calls", "cost_usd", "prompt_tokens", "completion_tokens"}
         self._usage: dict[str, dict[str, float]] = {}
@@ -214,13 +220,15 @@ class LiteLLMVLM:
             logger.debug("[VLM-COST] tier=%s cost unavailable", tier)
 
     async def triage(self, description: str) -> TriageResult:
-        """Classify trade + urgency + complexity — uses PRIMARY model (DEC-18).
+        """Classify trade + urgency + complexity.
 
-        Raises TriageParseError on unparseable output; the TRIAGE node
-        falls back to the deterministic keyword classifier (BL-4).
+        Verify-tier model by default (DEC-18 as amended); `triage_model`
+        overrides. Raises TriageParseError on unparseable output; the TRIAGE
+        node falls back to the keyword classifier (BL-4).
         """
         prompt = _render(_TRIAGE_PROMPT, description=description)
-        raw = await self._call(self._primary, prompt, "primary/triage")
+        tier = "primary/triage" if self._triage == self._primary else "triage"
+        raw = await self._call(self._triage, prompt, tier)
         return parse_triage(raw)
 
     async def diagnose(self, state: TicketState) -> list[Hypothesis]:

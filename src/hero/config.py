@@ -74,6 +74,13 @@ class Settings(BaseSettings):
         default="gpt-4o",
         description="Cross-provider fallback for both tiers",
     )
+    vlm_model_triage: str = Field(
+        default="",
+        description=(
+            "Optional TRIAGE model override; empty = vlm_model_verify "
+            "(DEC-18 as amended 2026-07). DEC-21 keyword fail-safes apply regardless"
+        ),
+    )
     anthropic_api_key: str = Field(default="")
     openai_api_key: str = Field(default="")
 

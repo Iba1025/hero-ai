@@ -164,9 +164,35 @@ def _make_adapters(live: bool) -> dict[str, Any]:
     embedder = ColModernVBertEmbedder()
     _ensure_fixtures_ingested(client, embedder)
 
+    # Index-integrity canary (P3-4): version-stamp sweep + live BM25 probe.
+    # A stale fixture index is re-ingested once (idempotent point IDs
+    # overwrite in place); anything still wrong after that fails the run.
+    from hero.ingestion.ingest import ingest_pdf
+    from hero.retrieval.integrity import IndexIntegrityError, bm25_canary, check_index_integrity
+
+    try:
+        check_index_integrity(client)
+    except IndexIntegrityError as exc:
+        print(f"[QDRANT] integrity check failed ({exc}) — re-ingesting fixtures...")
+        for doc_id, pdf_path, manufacturer, model_codes in FIXTURE_MANUALS:
+            ingest_pdf(
+                pdf_path=str(pdf_path),
+                doc_id=doc_id,
+                manufacturer=manufacturer,
+                model_codes=model_codes,
+                embedder=embedder,
+                client=client,
+            )
+        check_index_integrity(client)  # still stale → raise, don't mask
+    bm25_canary(client, "manual")  # every fixture contains the token "manual"
+    print("[QDRANT] index integrity OK (version stamp + BM25 canary)")
+
+    # Empty override = verify tier (DEC-18 as amended)
+    triage_tier = settings.vlm_model_triage or f"{settings.vlm_model_verify} (verify)"
     print(
         f"[ADAPTERS] live (VLM=LiteLLMVLM primary={settings.vlm_model_primary} "
-        f"verify={settings.vlm_model_verify} fallback={settings.vlm_model_fallback}, "
+        f"verify={settings.vlm_model_verify} fallback={settings.vlm_model_fallback} "
+        f"triage={triage_tier}, "
         f"embedder=ColModernVBERT, reranker=BGE, qdrant={settings.qdrant_url})"
     )
     return {
@@ -176,6 +202,7 @@ def _make_adapters(live: bool) -> dict[str, Any]:
             primary_model=settings.vlm_model_primary,
             verify_model=settings.vlm_model_verify,
             fallback_model=settings.vlm_model_fallback,
+            triage_model=settings.vlm_model_triage,
         ),
         "qdrant_client": client,
     }
@@ -292,6 +319,7 @@ async def run_ticket(
         "node_latency": node_latency,
         "cost_by_tier": cost_by_tier,
         "expected": expected,
+        "expected_complexity": ticket.get("expected_complexity"),
         "expected_evidence": ticket.get("expected_evidence"),
         "expected_claims": ticket.get("expected_claims"),
         "label": ticket.get("label", {}),
@@ -314,6 +342,14 @@ def evaluate(run_result: dict[str, Any]) -> dict[str, Any]:
     checks["path"] = "fast" if "retrieve_fast" in run_result.get("node_latency", {}) else "full"
     if "complexity" in expected:
         checks["complexity_match"] = result.get("complexity") == expected["complexity"]
+
+    # P3-4 rider: every golden ticket carries a non-gating expected_complexity
+    # annotation so routing stability is a tracked metric, not an anecdote.
+    checks["expected_complexity"] = run_result.get("expected_complexity")
+    checks["routing_mismatch"] = (
+        checks["expected_complexity"] is not None
+        and result.get("complexity") != checks["expected_complexity"]
+    )
 
     if expected.get("escalation_reason"):
         checks["escalation_reason_match"] = (
@@ -538,6 +574,25 @@ async def main() -> int:
             f"avg_cost=${avg_cost:.4f} avg_{retrieve_node}={r_lat}"
         )
 
+    # P3-4 rider: routing stability vs expected_complexity annotations.
+    # NON-GATING — tracked so triage drift is a metric, not an anecdote.
+    annotated = [r for r in all_results if r.get("expected_complexity") is not None]
+    if annotated:
+        mismatches = [r for r in annotated if r.get("routing_mismatch")]
+        print(
+            f"\nRouting stability (non-gating): {len(mismatches)}/{len(annotated)} "
+            f"runs deviated from expected_complexity"
+        )
+        by_tid: dict[str, list[dict[str, Any]]] = {}
+        for r in annotated:
+            by_tid.setdefault(r["ticket_id"], []).append(r)
+        for tid, rs in sorted(by_tid.items()):
+            got = [str(r.get("complexity")) for r in rs]
+            expected_c = rs[0]["expected_complexity"]
+            n_bad = sum(1 for r in rs if r.get("routing_mismatch"))
+            marker = " <-- MISMATCH" if n_bad else ""
+            print(f"  {tid}: expected={expected_c} got={'/'.join(got)}{marker}")
+
     # Spread across repeated runs (DEC-20: primary tier is non-deterministic).
     if args.runs > 1:
         print(f"\nSpread over {args.runs} runs (DEC-20 — mean/min/max):")
@@ -600,6 +655,9 @@ async def main() -> int:
         print("ECE: no (grounding_rate, outcome) pairs available")
     print(f"{'=' * 70}\n")
 
+    from hero.observability import flush
+
+    flush()  # drain buffered Langfuse spans (no-op when unconfigured)
     return 0 if all_pass else 1
 
 

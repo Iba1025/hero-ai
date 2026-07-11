@@ -14,9 +14,25 @@ from __future__ import annotations
 from qdrant_client import QdrantClient
 
 from hero.graph.state import EvidenceChunk
-from hero.ingestion.ingest import COLLECTION_NAME, text_to_sparse_vector
+from hero.ingestion.ingest import COLLECTION_NAME, TOKENIZER_VERSION, text_to_sparse_vector
 from hero.interfaces.embedder import Embedder
 from hero.interfaces.reranker import Reranker
+from hero.retrieval.integrity import IndexIntegrityError
+
+
+def _check_payload_version(payload: dict[str, object]) -> None:
+    """Query-time integrity check (P3-4 canary): reject stale-index chunks.
+
+    Any returned point stamped with a different tokenizer/schema version
+    (or none) means the index predates the running code — fail loudly
+    rather than retrieve against it.
+    """
+    version = payload.get("tokenizer_version")
+    if version != TOKENIZER_VERSION:
+        raise IndexIntegrityError(
+            f"retrieved point has tokenizer_version={version!r}, expected "
+            f"{TOKENIZER_VERSION!r} — re-ingest {COLLECTION_NAME!r}"
+        )
 
 
 def _reciprocal_rank_fusion(
@@ -66,6 +82,7 @@ def retrieve_dense(
     chunks: list[EvidenceChunk] = []
     for point in results.points:
         payload = point.payload or {}
+        _check_payload_version(payload)
         chunks.append(
             EvidenceChunk(
                 doc_id=str(payload.get("doc_id", "")),
@@ -96,6 +113,7 @@ def retrieve_bm25(
     chunks: list[EvidenceChunk] = []
     for point in results.points:
         payload = point.payload or {}
+        _check_payload_version(payload)
         chunks.append(
             EvidenceChunk(
                 doc_id=str(payload.get("doc_id", "")),

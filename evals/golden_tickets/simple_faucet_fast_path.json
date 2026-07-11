@@ -3,6 +3,7 @@
   "description": "Kitchen faucet dripping steadily from the spout. Everything else works fine.",
   "media": [],
   "sensor_readings": [],
+  "expected_complexity": "simple",
   "expected": {
     "trade": "plumbing",
     "urgency": "routine",

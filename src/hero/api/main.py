@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from hero.api.routers import outcomes, tickets, uploads
 from hero.config import get_settings, region_guard
+from hero.observability import flush
 
 
 @asynccontextmanager
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     region_guard(settings)
     yield
+    flush()  # drain buffered Langfuse spans (no-op when unconfigured)
 
 
 def create_app() -> FastAPI:

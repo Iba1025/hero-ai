@@ -3,6 +3,7 @@
   "description": "HVAC system making strange noise. Not cooling properly.",
   "media": [],
   "sensor_readings": [],
+  "expected_complexity": "complex",
   "expected": {
     "trade": "hvac",
     "urgency": "routine",

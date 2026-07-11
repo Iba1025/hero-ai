@@ -3,6 +3,7 @@
   "description": "Strong gas smell near the furnace in the basement. Noticed it when I came home.",
   "media": [],
   "sensor_readings": [],
+  "expected_complexity": "standard",
   "expected": {
     "trade": "gas",
     "urgency": "emergency",

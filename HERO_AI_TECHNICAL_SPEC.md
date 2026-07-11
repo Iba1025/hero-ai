@@ -37,7 +37,7 @@
 | DB | Postgres 16 | `asyncpg` + SQLAlchemy 2.x (async), Alembic migrations |
 | Vectors | Qdrant ≥1.10 | Native multivector (MaxSim) collections (DEC-3) |
 | Object storage | Cloudflare R2 (S3 API) | `ca` jurisdiction; `boto3` presigning only server-side |
-| LLM routing | LiteLLM | Tiered: `claude-fable-5` primary (DIAGNOSE/TRIAGE), `claude-sonnet-4-6` verify (claims/entailment), `gpt-4o` cross-provider fallback. Config: `VLM_MODEL_PRIMARY`, `VLM_MODEL_VERIFY`, `VLM_MODEL_FALLBACK` (DEC-18) |
+| LLM routing | LiteLLM | Tiered: `claude-fable-5` primary (DIAGNOSE), `claude-sonnet-4-6` verify (claims/entailment + TRIAGE, DEC-18 as amended), `gpt-4o` cross-provider fallback. Config: `VLM_MODEL_PRIMARY`, `VLM_MODEL_VERIFY`, `VLM_MODEL_FALLBACK`, `VLM_MODEL_TRIAGE` (empty = verify tier) |
 | Embedder | ColPali-family behind `Embedder` Protocol | Bake-off pending (DEC-2 / BL-5); default dev model: ColModernVBERT (small, CPU-viable) |
 | Reranker | Cross-encoder behind `Reranker` Protocol | BL-1; start with `BAAI/bge-reranker-v2-m3` local, keep Cohere Rerank as config option |
 | Observability | Langfuse (self-hosted, ca-central) | `langfuse` SDK; trace every graph run |
@@ -122,6 +122,7 @@ QDRANT_URL / QDRANT_API_KEY
 R2_ENDPOINT / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY   # bucket region: ca
 LANGFUSE_HOST / LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY           # self-hosted
 VLM_MODEL_PRIMARY / VLM_MODEL_VERIFY / VLM_MODEL_FALLBACK   # DEC-18 tiers (fable-5 / sonnet-4-6 / gpt-4o)
+VLM_MODEL_TRIAGE                                            # TRIAGE override; empty = verify tier (DEC-18 as amended)
 ANTHROPIC_API_KEY / OPENAI_API_KEY                          # provider keys (LiteLLM)
 EMBEDDER_IMPL               # "colmodernvbert" | "colqwen3"  (DEC-2 bake-off switch)
 RERANKER_IMPL               # "bge" | "cohere"
@@ -325,7 +326,7 @@ class Calibrator(Protocol):
 
 # vlm.py — the ONLY route to LLM providers (via LiteLLM adapter)
 class VLM(Protocol):
-    async def triage(self, description: str) -> TriageResult: ...          # BL-4, primary tier (DEC-21 fail-safes live in the node)
+    async def triage(self, description: str) -> TriageResult: ...          # BL-4, verify tier (DEC-18 amended; DEC-21 fail-safes live in the node)
     async def diagnose(self, state: TicketState) -> list[Hypothesis]: ...
     async def decompose_claims(self, hypothesis_text: str) -> list[str]: ...
     async def check_entailment(self, claim: str, evidence_text: str) -> bool: ...
@@ -454,10 +455,21 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
 - **Errors:** nodes raise typed exceptions; the graph catches, checkpoints, and routes to a
   `FAILED` terminal state with reason — never silent retry loops. External calls (LiteLLM, Qdrant)
   get bounded retries (3, exponential) at the adapter layer only.
-- **Tracing:** every node wrapped with the Langfuse decorator in `observability/`; span name =
-  node name; run metadata includes `ticket_id`, `EMBEDDER_IMPL`, `RERANKER_IMPL` (bake-off attribution).
+- **Tracing `[IMPL: src/hero/observability/tracing.py]`:** every node wrapped with
+  `traced_node` in `build.py`; span name = node name; one trace per ticket (trace id seeded
+  from `ticket_id`); metadata includes `ticket_id`, `EMBEDDER_IMPL`, `RERANKER_IMPL` (bake-off
+  attribution). No-op passthrough when `LANGFUSE_*` unset; span outputs are scalar summaries
+  of the node's state delta, never full evidence text; `flush()` on API shutdown + eval end.
 - **Prompts:** live in `src/hero/prompts/*.md` as files, versioned in git, loaded at startup —
   never inline f-strings in nodes. Prompt changes trigger the eval CI job.
+- **Index integrity `[IMPL: src/hero/retrieval/integrity.py]`:** every Qdrant point is stamped
+  with `tokenizer_version` at ingestion (`ingestion/ingest.py:TOKENIZER_VERSION` — bump on any
+  incompatible tokenizer/schema change). Wherever a Qdrant client is wired in (eval harness
+  today; API startup once retrieval lands there), run `check_index_integrity` (version-stamp
+  sweep) **and** `bm25_canary` (known-present term must return >0 BM25 results) before serving
+  queries; the query side additionally rejects any returned point with a stale stamp. Mismatch
+  raises `IndexIntegrityError` — never degrade silently. Born from the 2026-07-10 incident:
+  builtin `hash()` randomization left the sparse index silently dead and dense+RRF masked it.
 - **Types:** mypy --strict passes. No `Any` in `graph/`, `interfaces/`, `safety/`.
 
 ## 12. Definition of Done — active backlog
@@ -468,7 +480,7 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
 | BL-1 | `Reranker` Protocol + bge adapter + wired into full path + eval shows hit-rate@5 lift + Cohere adapter behind config flag |
 | BL-2 | `platt.py` adapter default; isotonic adapter exists but gated on label_count ≥ 1000; ECE reported per eval run |
 | BL-3 | `evals/` runnable locally + CI; ≥20 golden tickets seeded |
-| BL-4 | ✅ VLM `triage()` (primary tier) + `TriageResult` Literal vocabulary gate + DEC-21 keyword fail-safes in `graph/nodes/triage.py`; `retrieve_fast` node behind `TRIAGE` conditional edge; eval prints per-ticket `complexity=`/`path=` and a fast-vs-full "Path split" section (latency, cost, retrieve-node latency); `test_triage_routing.py` covers parse gate, fail-safes, routing |
+| BL-4 | ✅ VLM `triage()` (verify tier per DEC-18 amendment) + `TriageResult` Literal vocabulary gate + DEC-21 keyword fail-safes in `graph/nodes/triage.py`; `retrieve_fast` node behind `TRIAGE` conditional edge; eval prints per-ticket `complexity=`/`path=` and a fast-vs-full "Path split" section (latency, cost, retrieve-node latency); `test_triage_routing.py` covers parse gate, fail-safes, routing |
 | BL-5 | Both embedder adapters pass contract tests; bake-off report (NDCG on our manuals, $/1k pages, latency) committed to `docs/` |
 | BL-9 | Evidence grader + query rewrite + `max_corrective_rounds`/timeout caps + eval shows lift on hard-query subset without >1.5× median latency on simple tickets |
 | BL-10 | `ConformalGate` with configurable α + escalation on non-singleton/hazard sets + coverage monitoring in Langfuse + INV-1 hard rules provably unaffected (invariant test) |
