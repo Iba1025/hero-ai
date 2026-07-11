@@ -84,6 +84,23 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="")
     openai_api_key: str = Field(default="")
 
+    # ── Auth (P4-1) ──────────────────────────────────────────────────────
+    jwt_secret_key: str = Field(
+        default="",
+        description="HS256 signing secret. Empty = auth endpoints return 503 (fail loudly)",
+    )
+    jwt_expiry_seconds: int = Field(
+        default=43200, description="Session cookie/token TTL — 12h covers a field workday"
+    )
+    auth_cookie_secure: bool = Field(
+        default=False,
+        description="Set the Secure flag on the session cookie (enable behind HTTPS)",
+    )
+    cors_origins: str = Field(
+        default="http://localhost:5173",
+        description="Comma-separated SPA origins allowed to send credentialed requests",
+    )
+
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──
     embedder_impl: Literal["colmodernvbert", "colqwen3", "stub"] = Field(default="stub")
     reranker_impl: Literal["bge", "cohere", "stub"] = Field(default="stub")

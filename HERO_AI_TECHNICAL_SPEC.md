@@ -100,7 +100,8 @@ hero/
 │   │   └── repo.py                # typed query layer; nodes never write raw SQL
 │   ├── ingestion/                 # manual corpus → Qdrant (offline job)
 │   ├── observability/             # Langfuse wiring, trace decorators
-│   └── api/                       # FastAPI routers: tickets, uploads, outcomes, admin
+│   ├── auth/                      # P4-1: argon2id passwords, JWT sessions, seed CLI (python -m hero.auth seed)
+│   └── api/                       # FastAPI routers: auth, tickets, uploads, outcomes
 ├── evals/                         # BL-3 regression suite (§10)
 │   ├── golden_tickets/            # labeled ticket fixtures (JSON)
 │   └── run_eval.py
@@ -127,6 +128,10 @@ ANTHROPIC_API_KEY / OPENAI_API_KEY                          # provider keys (Lit
 EMBEDDER_IMPL               # "colmodernvbert" | "colqwen3"  (DEC-2 bake-off switch)
 RERANKER_IMPL               # "bge" | "cohere"
 CALIBRATOR_IMPL             # "platt" (default; "isotonic" gated behind label count ≥1000, DEC-5)
+JWT_SECRET_KEY              # P4-1 auth; empty = authed endpoints 503 (fail loudly, never open)
+JWT_EXPIRY_SECONDS          # session TTL (default 43200 = 12h)
+AUTH_COOKIE_SECURE          # Secure flag on session cookie (enable behind HTTPS)
+CORS_ORIGINS                # comma-separated SPA origins (default http://localhost:5173)
 ```
 
 Startup MUST fail loudly (not degrade) if a store resolves to a non-Canadian region where
@@ -296,6 +301,19 @@ CREATE TABLE contractor_statement (
     CONSTRAINT correction_has_fault CHECK (verdict IS NULL OR verdict = 'confirmed' OR actual_fault IS NOT NULL)
 );
 CREATE INDEX ON contractor_statement (created_at);   -- flywheel scans; DuckDB split later (DEC-4)
+
+CREATE TABLE app_user (                   -- P4-1 auth [IMPL: alembic/versions/0004_app_user.py]
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id          UUID NOT NULL,        -- scopes every ticket query (repo.get_ticket_for_org)
+    email           TEXT NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,        -- argon2id; never plaintext, never reversible
+    role            TEXT NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT role_allowed CHECK (role IN ('operator', 'contractor', 'admin'))
+);
+CREATE INDEX ON app_user (org_id);
+-- No self-signup: rows seeded via `python -m hero.auth seed`. Sessions are stateless
+-- HS256 JWTs (sub/org/role claims) in an httponly cookie; revocation = rotate JWT_SECRET_KEY.
 ```
 
 LangGraph checkpoint tables: managed by `langgraph-checkpoint-postgres` — do not hand-edit.

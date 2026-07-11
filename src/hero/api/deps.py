@@ -1,11 +1,14 @@
-"""Dependency injection for FastAPI — graph, adapters, DB session."""
+"""Dependency injection for FastAPI — graph, adapters, DB session, auth."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+import uuid
+from collections.abc import AsyncGenerator, Callable
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from hero.adapters.stub_calibrator import StubCalibrator
@@ -13,9 +16,55 @@ from hero.adapters.stub_catalog import StubCatalogResolver
 from hero.adapters.stub_embedder import StubEmbedder
 from hero.adapters.stub_reranker import StubReranker
 from hero.adapters.stub_vlm import StubVLM
+from hero.auth.tokens import TokenError, decode_session_token
 from hero.config import Settings, get_settings
 from hero.graph.build import build_graph
 from hero.interfaces.calibrator import Calibrator
+
+SESSION_COOKIE = "hero_session"
+
+
+@dataclass(frozen=True)
+class AuthUser:
+    """Authenticated principal, decoded from the signed session cookie."""
+
+    id: uuid.UUID
+    org_id: uuid.UUID
+    role: str
+
+
+def get_current_user(request: Request) -> AuthUser:
+    """Decode the session cookie into an AuthUser. 401 on anything invalid.
+
+    Stateless by design (P4-1): claims are signed, so no DB hit per request.
+    Revocation = rotate JWT_SECRET_KEY.
+    """
+    settings = get_settings()
+    if not settings.jwt_secret_key:
+        raise HTTPException(status_code=503, detail="Auth not configured (JWT_SECRET_KEY unset)")
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        claims = decode_session_token(token, secret=settings.jwt_secret_key)
+        return AuthUser(
+            id=uuid.UUID(claims.user_id),
+            org_id=uuid.UUID(claims.org_id),
+            role=claims.role,
+        )
+    except (TokenError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired session") from exc
+
+
+def require_role(*roles: str) -> Callable[..., AuthUser]:
+    """Dependency factory: 403 unless the caller's role is in `roles`."""
+
+    def _check(user: AuthUser = Depends(get_current_user)) -> AuthUser:  # noqa: B008
+        if user.role not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient role")
+        return user
+
+    return _check
 
 
 @lru_cache(maxsize=1)

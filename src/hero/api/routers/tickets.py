@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hero.api.deps import get_db_session, get_graph
+from hero.api.deps import AuthUser, get_current_user, get_db_session, get_graph, require_role
 from hero.storage.repo import (
     create_ticket as repo_create_ticket,
 )
 from hero.storage.repo import (
+    get_ticket_for_org,
     persist_diagnosis_from_state,
     update_ticket_status,
 )
@@ -22,7 +23,7 @@ router = APIRouter()
 
 
 class CreateTicketRequest(BaseModel):
-    org_id: str
+    # org_id comes from the session token (P4-1) — never from the client.
     building_id: str
     description: str
     media: list[dict[str, str]] = Field(default_factory=list)
@@ -57,13 +58,14 @@ class TicketStatusResponse(BaseModel):
 async def create_ticket(
     request: CreateTicketRequest,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> CreateTicketResponse:
     """Create a ticket row, run the graph, persist diagnosis + claims (DEC-6)."""
     graph = await get_graph()
 
     ticket = await repo_create_ticket(
         session,
-        org_id=uuid.UUID(request.org_id),
+        org_id=user.org_id,
         building_id=uuid.UUID(request.building_id),
         description=request.description,
     )
@@ -100,8 +102,14 @@ async def create_ticket(
 
 
 @router.get("/{ticket_id}", response_model=TicketStatusResponse)
-async def get_ticket(ticket_id: str) -> TicketStatusResponse:
-    """Get ticket status, diagnosis, and claims."""
+async def get_ticket(
+    ticket_id: str,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(get_current_user),  # noqa: B008
+) -> TicketStatusResponse:
+    """Get ticket status, diagnosis, and claims. Org-scoped (P4-1)."""
+    await _require_ticket_in_org(session, ticket_id, user)
+
     graph = await get_graph()
     thread_id = f"ticket-{ticket_id}"
     config = {"configurable": {"thread_id": thread_id}}
@@ -136,13 +144,29 @@ async def get_ticket(ticket_id: str) -> TicketStatusResponse:
     )
 
 
+async def _require_ticket_in_org(session: AsyncSession, ticket_id: str, user: AuthUser) -> None:
+    """404 unless the ticket exists in the caller's org (P4-1 invariant).
+
+    404 (not 403) for cross-org ids — no cross-org existence leak. The org
+    filter lives in the query (repo.get_ticket_for_org), not in caller code.
+    """
+    try:
+        ticket_uuid = uuid.UUID(ticket_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Ticket not found") from exc
+    if await get_ticket_for_org(session, ticket_uuid, user.org_id) is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+
 @router.post("/{ticket_id}/clarify-answer")
 async def clarify_answer(
     ticket_id: str,
     request: ClarifyAnswerRequest,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> dict[str, str]:
-    """Resume an interrupted run with a clarification answer."""
+    """Resume an interrupted run with a clarification answer. Org-scoped (P4-1)."""
+    await _require_ticket_in_org(session, ticket_id, user)
     graph = await get_graph()
     thread_id = f"ticket-{ticket_id}"
     config = {"configurable": {"thread_id": thread_id}}

@@ -202,3 +202,35 @@ class ContractorStatement(Base):
 
     ticket: Mapped[Ticket] = relationship(back_populates="contractor_statements")
     diagnosis: Mapped[Diagnosis] = relationship(back_populates="contractor_statements")
+
+
+# Allowed user roles (P4-1 auth). Kept next to the model so the DB CHECK,
+# the API Literal, and this tuple cannot drift silently.
+VALID_ROLES = ("operator", "contractor", "admin")
+
+
+class User(Base):
+    """Auth principal (P4-1). No self-signup — rows are seeded via
+    `python -m hero.auth seed` by an admin. org_id scopes every ticket
+    query for non-admin roles (see repo.get_ticket_for_org)."""
+
+    __tablename__ = "app_user"  # "user" is reserved in Postgres
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)  # argon2id
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('operator', 'contractor', 'admin')",
+            name="role_allowed",
+        ),
+        Index("ix_app_user_org_id", "org_id"),
+    )

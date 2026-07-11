@@ -15,6 +15,7 @@ from hero.storage.models import (
     DiagnosisClaim,
     Media,
     Ticket,
+    User,
     WorkOrder,
 )
 
@@ -34,6 +35,36 @@ async def create_ticket(
 
 async def get_ticket(session: AsyncSession, ticket_id: uuid.UUID) -> Ticket | None:
     return await session.get(Ticket, ticket_id)
+
+
+async def get_ticket_for_org(
+    session: AsyncSession, ticket_id: uuid.UUID, org_id: uuid.UUID
+) -> Ticket | None:
+    """Org-scoped ticket lookup (P4-1 invariant): the org filter lives in the
+    query, not in caller-side checks — a cross-org id resolves to None."""
+    result = await session.execute(
+        select(Ticket).where(Ticket.id == ticket_id, Ticket.org_id == org_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
+    result = await session.execute(select(User).where(User.email == email))
+    return result.scalar_one_or_none()
+
+
+async def create_user(
+    session: AsyncSession,
+    *,
+    org_id: uuid.UUID,
+    email: str,
+    password_hash: str,
+    role: str,
+) -> User:
+    user = User(org_id=org_id, email=email, password_hash=password_hash, role=role)
+    session.add(user)
+    await session.flush()
+    return user
 
 
 class FlywheelViolationError(Exception):

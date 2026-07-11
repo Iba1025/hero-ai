@@ -12,11 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hero.api.deps import get_db_session
+from hero.api.deps import AuthUser, get_db_session, require_role
 from hero.storage.repo import (
     create_contractor_statement,
     get_diagnosis_for_ticket,
-    get_ticket,
+    get_ticket_for_org,
     label_velocity,
     update_ticket_status,
 )
@@ -30,7 +30,7 @@ class OutcomeRequest(BaseModel):
     verdict: Literal["confirmed", "partially_correct", "wrong"] | None = None
     actual_fault: str | None = None
     actual_part_sku: str | None = None
-    contractor_id: str | None = None
+    # P4-1: contractor_id is stamped from the session token, never client-supplied.
     free_text: str | None = None
     unlabeled_reason: str | None = None
 
@@ -53,6 +53,7 @@ class LabelVelocityResponse(BaseModel):
 async def create_outcome(
     request: OutcomeRequest,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(require_role("contractor", "admin")),  # noqa: B008
 ) -> OutcomeResponse:
     """Write a contractor statement — the flywheel table (BL-0).
 
@@ -71,7 +72,8 @@ async def create_outcome(
         )
 
     ticket_uuid = uuid.UUID(request.ticket_id)
-    ticket = await get_ticket(session, ticket_uuid)
+    # Org-scoped lookup (P4-1): cross-org ticket ids resolve to 404.
+    ticket = await get_ticket_for_org(session, ticket_uuid, user.org_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
@@ -86,7 +88,7 @@ async def create_outcome(
         verdict=request.verdict,
         actual_fault=request.actual_fault,
         actual_part_sku=request.actual_part_sku,
-        contractor_id=uuid.UUID(request.contractor_id) if request.contractor_id else None,
+        contractor_id=user.id,
         free_text=request.free_text,
         unlabeled_reason=request.unlabeled_reason,
     )
@@ -106,6 +108,7 @@ async def create_outcome(
 async def get_label_velocity(
     days: int = 7,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
+    user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> LabelVelocityResponse:
     """Label velocity over a trailing window (BL-0 DoD tracked metric)."""
     if days < 1:

@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from hero.api.deps import AuthUser, get_current_user
 from hero.config import get_settings
 from hero.storage.media import presigned_upload_url
 
@@ -28,8 +29,15 @@ class PresignedUploadResponse(BaseModel):
 
 
 @router.post("/presign", response_model=PresignedUploadResponse)
-async def get_presigned_upload(request: PresignedUploadRequest) -> PresignedUploadResponse:
-    """Generate a presigned PUT URL for direct client upload to R2 (INV-3)."""
+async def get_presigned_upload(
+    request: PresignedUploadRequest,
+    user: AuthUser = Depends(get_current_user),  # noqa: B008
+) -> PresignedUploadResponse:
+    """Generate a presigned PUT URL for direct client upload to R2 (INV-3).
+
+    P4 note: the public tenant-intake path (P4-4) will get its own presign
+    flow keyed to a building link — this endpoint stays session-authed.
+    """
     settings = get_settings()
     object_key = f"tickets/{request.ticket_id}/{uuid.uuid4()}/{request.filename}"
 
