@@ -117,7 +117,9 @@ async def get_ticket(ticket_id: str) -> TicketStatusResponse:
     elif values.get("pending_question"):
         status = "clarifying"
     elif values.get("work_order_id"):
-        status = "resolved"
+        # P3-2: never report 'resolved' from graph state alone — 'resolved' requires a
+        # contractor_statement row and is only set by POST /outcomes (PRD §9).
+        status = "diagnosed"
 
     return TicketStatusResponse(
         ticket_id=values.get("ticket_id", ticket_id),

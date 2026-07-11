@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hero.storage.models import (
@@ -35,7 +36,19 @@ async def get_ticket(session: AsyncSession, ticket_id: uuid.UUID) -> Ticket | No
     return await session.get(Ticket, ticket_id)
 
 
+class FlywheelViolationError(Exception):
+    """Raised when a ticket would reach 'resolved' without a contractor_statement (PRD §9).
+
+    P3-2: previously this invariant held only because the /outcomes endpoint happened
+    to write the statement before flipping the status — any other caller could bypass it.
+    """
+
+
 async def update_ticket_status(session: AsyncSession, ticket_id: uuid.UUID, status: str) -> None:
+    if status == "resolved" and not await has_contractor_statement(session, ticket_id):
+        raise FlywheelViolationError(
+            f"Ticket {ticket_id} cannot reach 'resolved' without a contractor_statement (PRD §9)"
+        )
     ticket = await session.get(Ticket, ticket_id)
     if ticket is not None:
         ticket.status = status
@@ -199,3 +212,29 @@ async def has_contractor_statement(session: AsyncSession, ticket_id: uuid.UUID) 
         select(ContractorStatement.id).where(ContractorStatement.ticket_id == ticket_id).limit(1)
     )
     return result.scalar() is not None
+
+
+async def label_velocity(session: AsyncSession, *, days: int = 7) -> dict[str, float | int]:
+    """Label-velocity metric (BL-0 DoD): statement counts over a trailing window.
+
+    labeled = rows with a verdict (usable training signal);
+    unlabeled = rows with only an unlabeled_reason (honest gap, not signal).
+    Langfuse dashboard wiring lands with P3-4; this is the source metric.
+    """
+    since = datetime.now(UTC) - timedelta(days=days)
+    row = (
+        await session.execute(
+            select(
+                func.count(ContractorStatement.id),
+                func.count(ContractorStatement.verdict),
+            ).where(ContractorStatement.created_at >= since)
+        )
+    ).one()
+    total, labeled = int(row[0]), int(row[1])
+    return {
+        "days": days,
+        "total": total,
+        "labeled": labeled,
+        "unlabeled": total - labeled,
+        "per_day": total / days if days > 0 else 0.0,
+    }

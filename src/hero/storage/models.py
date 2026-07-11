@@ -152,6 +152,11 @@ class WorkOrder(Base):
     ticket: Mapped[Ticket] = relationship(back_populates="work_orders")
 
 
+# Allowed contractor verdicts (BL-0). Kept next to the model so the DB CHECK,
+# the API Literal, and this tuple cannot drift silently.
+VALID_VERDICTS = ("confirmed", "partially_correct", "wrong")
+
+
 class ContractorStatement(Base):
     """THE FLYWHEEL TABLE (BL-0).
 
@@ -181,6 +186,16 @@ class ContractorStatement(Base):
         CheckConstraint(
             "verdict IS NOT NULL OR unlabeled_reason IS NOT NULL",
             name="verdict_or_reason",
+        ),
+        # P3-2: verdict vocabulary is closed — a free-text verdict is an unusable label.
+        CheckConstraint(
+            "verdict IS NULL OR verdict IN ('confirmed', 'partially_correct', 'wrong')",
+            name="verdict_allowed",
+        ),
+        # P3-2: a correction without the actual fault is not a training signal.
+        CheckConstraint(
+            "verdict IS NULL OR verdict = 'confirmed' OR actual_fault IS NOT NULL",
+            name="correction_has_fault",
         ),
         Index("ix_contractor_statement_created_at", "created_at"),
     )

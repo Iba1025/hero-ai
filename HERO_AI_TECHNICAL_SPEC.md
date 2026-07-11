@@ -279,14 +279,17 @@ CREATE TABLE contractor_statement (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id       UUID NOT NULL REFERENCES ticket(id),
     diagnosis_id    UUID NOT NULL REFERENCES diagnosis(id),
-    verdict         TEXT NOT NULL,        -- confirmed|partially_correct|wrong
+    verdict         TEXT,                 -- confirmed|partially_correct|wrong; NULL when unlabeled
     actual_fault    TEXT,                 -- required when verdict != confirmed
     actual_part_sku TEXT,
     contractor_id   UUID,
     free_text       TEXT,
     unlabeled_reason TEXT,                -- explicit reason if label unobtainable
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT verdict_or_reason CHECK (verdict IS NOT NULL OR unlabeled_reason IS NOT NULL)
+    CONSTRAINT verdict_or_reason CHECK (verdict IS NOT NULL OR unlabeled_reason IS NOT NULL),
+    -- P3-2 hardening: closed verdict vocabulary; corrections must carry the actual fault
+    CONSTRAINT verdict_allowed CHECK (verdict IS NULL OR verdict IN ('confirmed', 'partially_correct', 'wrong')),
+    CONSTRAINT correction_has_fault CHECK (verdict IS NULL OR verdict = 'confirmed' OR actual_fault IS NOT NULL)
 );
 CREATE INDEX ON contractor_statement (created_at);   -- flywheel scans; DuckDB split later (DEC-4)
 ```
@@ -457,7 +460,7 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
 
 | BL | Done means |
 |---|---|
-| BL-0 | `contractor_statement` table + `POST /outcomes` endpoint + `test_flywheel.py` green + label-velocity metric in Langfuse dashboard |
+| BL-0 | `contractor_statement` table + `POST /outcomes` endpoint + `test_flywheel.py` green + label-velocity metric (`GET /outcomes/metrics/label-velocity` ✅; Langfuse dashboard pending). P3-2 hardening: `update_ticket_status` raises `FlywheelViolationError` on `resolved` without a statement; `verdict_allowed` + `correction_has_fault` CHECKs (migration 0003) mirrored in API validation |
 | BL-1 | `Reranker` Protocol + bge adapter + wired into full path + eval shows hit-rate@5 lift + Cohere adapter behind config flag |
 | BL-2 | `platt.py` adapter default; isotonic adapter exists but gated on label_count ≥ 1000; ECE reported per eval run |
 | BL-3 | `evals/` runnable locally + CI; ≥20 golden tickets seeded |

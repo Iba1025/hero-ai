@@ -172,7 +172,7 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 
 | ID | Item | Effort | Why |
 |---|---|---|---|
-| **BL-0** | Instrument `OUTCOME` label capture: near-zero-friction contractor confirm/correct UX; label velocity as tracked metric | ongoing | The moat. Everything else is replicable. |
+| **BL-0** | Instrument `OUTCOME` label capture: near-zero-friction contractor confirm/correct UX; label velocity as tracked metric. 2026-07 hardening (P3-2): repo layer refuses `resolved` without a `contractor_statement`; closed verdict vocabulary + corrections-require-`actual_fault` (DB CHECKs + API); `GET /outcomes/metrics/label-velocity` (Langfuse dashboard lands with observability work). Contractor UX still open | ongoing | The moat. Everything else is replicable. |
 | **BL-1** | ✅ 2026-07: BGE cross-encoder reranker (`adapters/bge_reranker.py`), wired into full path; Cohere adapter stubbed behind config flag (DEC-8). Hit-rate@5 lift demo pending `--live` eval run | days | Highest-ROI retrieval change (both reviews agree) |
 | **BL-2** | ✅ 2026-07: `PlattCalibrator` default (`adapters/platt.py`); `IsotonicCalibrator` self-gated ≥1K labels (DEC-5); ECE reported per eval run | hours | Current default statistically invalid at our volume |
 | **BL-3** | Eval pipeline: golden tickets + retrieval metrics (recall@k, nDCG@5) + LLM-as-judge grounding, CI-gated | ~1 wk | Can't improve what isn't measured; prereq for BL-5/BL-9 |
