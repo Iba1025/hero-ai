@@ -384,11 +384,14 @@ async def test_bogus_verdict_rejected_by_db(db_session: AsyncSession) -> None:
 async def test_correction_without_actual_fault_rejected_by_db(db_session: AsyncSession) -> None:
     """P3-2: correction_has_fault CHECK — 'wrong' without actual_fault is not a label."""
     ticket, diag = await _ticket_with_diagnosis(db_session, "p32-fault")
+    # Capture IDs now — rollback() below expires the ORM instances, and a
+    # lazy attribute refresh under asyncpg raises MissingGreenlet.
+    ticket_id, diag_id = ticket.id, diag.id
     with pytest.raises(Exception):  # noqa: B017
         db_session.add(
             ContractorStatement(
-                ticket_id=ticket.id,
-                diagnosis_id=diag.id,
+                ticket_id=ticket_id,
+                diagnosis_id=diag_id,
                 verdict="wrong",
                 actual_fault=None,
             )
@@ -399,8 +402,8 @@ async def test_correction_without_actual_fault_rejected_by_db(db_session: AsyncS
     # With actual_fault the same correction is accepted.
     cs = await create_contractor_statement(
         db_session,
-        ticket_id=ticket.id,
-        diagnosis_id=diag.id,
+        ticket_id=ticket_id,
+        diagnosis_id=diag_id,
         verdict="wrong",
         actual_fault="Cracked supply line, not the P-trap",
     )
