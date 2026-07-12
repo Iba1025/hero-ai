@@ -6,8 +6,10 @@ Covers:
 - clarify_allowed deterministic guardrail (P4-5b): hard-escalate trades and
   hazard-keyword descriptions never CLARIFY.
 - RETRIEVE node: insufficient → pending_question set; sufficient → not set;
-  fail-open on parse/call failure; sufficiency skipped (no VLM call, no tax)
-  on fast path, preset pending_question, clarify cap, and hazard tickets.
+  fail-open on parse/call failure; the fast path pays the check too (INV-5:
+  a triage "simple" verdict cannot skip it); sufficiency skipped (no VLM
+  call, no tax) on preset pending_question, after ANY clarify round, and on
+  hazard tickets.
 - StubVLM.assess_sufficiency determinism: fires only on unresolvable-trade +
   vague-marker tickets, and never after a clarification round.
 """
@@ -183,12 +185,13 @@ def test_sufficiency_failure_fails_open(exc: Exception) -> None:
     assert len(out["evidence"]) == 5
 
 
-def test_no_sufficiency_on_fast_path() -> None:
-    """Full path only — simple tickets never pay the sufficiency tax."""
+def test_fast_path_pays_sufficiency_check_too() -> None:
+    """INV-5 rider: a ticket the system would judge insufficient can never
+    reach DIAGNOSE unasked merely because triage called it simple."""
     vlm = _SpySufficiencyVLM(SufficiencyResult(sufficient=False, question=CONCRETE_QUESTION))
     out = asyncio.run(_node(vlm, fast_path=True)(_state()))
-    assert "pending_question" not in out
-    assert vlm.calls == 0
+    assert out["pending_question"] == CONCRETE_QUESTION
+    assert vlm.calls == 1
 
 
 def test_no_sufficiency_when_question_already_pending() -> None:
@@ -199,10 +202,12 @@ def test_no_sufficiency_when_question_already_pending() -> None:
     assert vlm.calls == 0
 
 
-def test_no_sufficiency_at_clarify_cap() -> None:
-    """clarify_rounds cap unchanged: at the cap the question would be ignored."""
+@pytest.mark.parametrize("rounds", [1, 2, 3])
+def test_no_sufficiency_after_any_clarify_round(rounds: int) -> None:
+    """P4-5 rider: at most one organic check per ticket — the loop-back never
+    re-asks a tenant who already answered (and never re-pays the tax)."""
     vlm = _SpySufficiencyVLM(SufficiencyResult(sufficient=False, question=CONCRETE_QUESTION))
-    out = asyncio.run(_node(vlm)(_state(clarify_rounds=3)))
+    out = asyncio.run(_node(vlm)(_state(clarify_rounds=rounds)))
     assert "pending_question" not in out
     assert vlm.calls == 0
 

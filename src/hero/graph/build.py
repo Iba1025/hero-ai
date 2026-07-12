@@ -91,11 +91,14 @@ def build_graph(
     """
     # Create node functions with injected adapters
     triage_fn = make_triage(vlm)
-    # Full path gets the VLM for the P4-5 sufficiency check; the fast path
-    # never does — simple tickets don't pay the per-ticket sufficiency tax.
+    # BOTH paths get the VLM for the P4-5 sufficiency check (INV-5 rider):
+    # a triage "simple" verdict must never let an insufficient ticket reach
+    # DIAGNOSE unasked. An insufficient fast-path ticket CLARIFYs and loops
+    # back into the FULL path (CLARIFY always re-enters `retrieve`, BL-4).
+    # The check runs at most once per ticket — never after a clarify round.
     retrieve_fn = make_retrieve(embedder, reranker, qdrant_client=qdrant_client, vlm=vlm)
     retrieve_fast_fn = make_retrieve(
-        embedder, reranker, qdrant_client=qdrant_client, fast_path=True
+        embedder, reranker, qdrant_client=qdrant_client, fast_path=True, vlm=vlm
     )
     diagnose_fn = make_diagnose(vlm)
     verify_fn = make_verify(vlm, calibrator, grounding_threshold, grounding_threshold_strict)

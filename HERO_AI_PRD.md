@@ -47,6 +47,11 @@ evaluated against: *does this increase label velocity or label quality?*
   contradiction — this invariant is literature-backed, not a preference.)
 - **INV-5 · Clarify, don't guess.** If retrieved evidence + ticket content are insufficient to diagnose,
   `CLARIFY` asks a human and loops back to `RETRIEVE`. Hallucinating on thin information is a bug.
+  `[IMPL: src/hero/graph/nodes/retrieve.py]` (P4-5): verify-tier sufficiency check on BOTH retrieval
+  paths — a triage "simple" verdict can never let an insufficient ticket reach DIAGNOSE unasked
+  (tested: tests/invariants/test_inv5_clarify.py). At most one organic check per ticket (no re-ask
+  after a clarify round); questions must be concrete and tenant-answerable (generic questions are
+  rejected at parse time and fail open to DIAGNOSE); hard-escalate/hazard tickets never CLARIFY (INV-1).
 - **INV-6 · Every state transition is persisted** (LangGraph Postgres checkpointer). Resumability
   and the audit trail depend on this. Never bypass the checkpointer for "quick" paths.
 - **INV-7 · BMS-independence.** The full pipeline (INTAKE → OUTCOME) must produce a complete,

@@ -5,10 +5,13 @@ falls back to stub evidence when no Qdrant is available (skeleton evals).
 Fast path (complexity=="simple"): BM25-only top 5, no rerank.
 Corrective loop is BL-9 (not in this phase).
 
-P4-5 (INV-5): after evidence assembly the full path runs a verify-tier
+P4-5 (INV-5): after evidence assembly BOTH paths run a verify-tier
 sufficiency check; insufficient → sets pending_question and the existing
-RETRIEVE→CLARIFY conditional routes to the interrupt. Fails open — a bad
-sufficiency call must never block a ticket.
+RETRIEVE→CLARIFY conditional routes to the interrupt. A triage "simple"
+verdict must never let an insufficient ticket reach DIAGNOSE unasked —
+insufficient fast-path tickets CLARIFY and loop back into the full path.
+Runs at most once per ticket (never after a clarify round). Fails open —
+a bad sufficiency call must never block a ticket.
 """
 
 from __future__ import annotations
@@ -39,8 +42,8 @@ def make_retrieve(
     fast_path=True builds the BL-4 fast-path node (BM25-only top 5, no
     rerank) — the TRIAGE conditional edge decides which node runs, so the
     node itself no longer reads state.complexity.
-    vlm enables the P4-5 sufficiency check (full path only — the fast-path
-    node is never built with a VLM).
+    vlm enables the P4-5 sufficiency check (both paths — INV-5: a triage
+    "simple" verdict cannot skip it).
     """
 
     async def retrieve(state: dict[str, Any]) -> dict[str, Any]:
@@ -86,11 +89,15 @@ def make_retrieve(
         state: dict[str, Any], evidence: list[dict[str, Any]]
     ) -> str | None:
         """Return a clarify question, or None to proceed to DIAGNOSE."""
-        if vlm is None or fast_path:
+        if vlm is None:
             return None
         # Don't clobber an already-pending question (resume/injection paths),
-        # and don't spend the call once the clarify cap makes it moot.
-        if state.get("pending_question") or state.get("clarify_rounds", 0) >= 3:
+        # and never re-check after ANY clarify round (P4-5 rider): the tenant
+        # already answered once — re-asking is a UX anti-pattern and a latency
+        # tax on exactly the slowest tickets. VERIFY + the safety gate still
+        # gate the output; this also keeps the clarify cap unreachable
+        # organically (injected rounds remain bounded by the cap in routing).
+        if state.get("pending_question") or state.get("clarify_rounds", 0) >= 1:
             return None
         # Deterministic guardrail (P4-5b, INV-1): never CLARIFY on a hazard —
         # gas/HV/structural/water and hazard-keyword tickets go straight

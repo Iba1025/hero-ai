@@ -218,16 +218,20 @@ class TicketState(BaseModel):
 - `CLARIFY` uses `interrupt()` — the graph pauses, `pending_question` is surfaced via API,
   human answer resumes the run at RETRIEVE. `clarify_rounds >= 3` → route to human dispatcher, not another loop.
 - **Sufficiency check** `[IMPL: src/hero/graph/nodes/retrieve.py]` (P4-5, INV-5): after evidence
-  assembly, the full-path RETRIEVE node makes a verify-tier `assess_sufficiency` call
+  assembly, BOTH retrieve nodes (full and fast path) make a verify-tier `assess_sufficiency` call
   (`prompts/sufficiency.md`) judging whether evidence + ticket plausibly support a diagnosis;
   insufficient → sets `pending_question` (ONE concrete, tenant-answerable question) and the existing
-  RETRIEVE→CLARIFY conditional routes to the interrupt. Deterministic guardrails, checked BEFORE the
-  call: never on the fast path, never when a question is already pending, never at the clarify cap,
-  and never on hazards — `safety.gate.clarify_allowed` (pure, no LLM) blocks CLARIFY for
-  hard-escalate trades and hazard-keyword descriptions, which also skips the per-ticket sufficiency
-  tax. Fails open: parse failure or a generic question (`parse_sufficiency` rejects "please provide
-  more details"-style output, `SufficiencyParseError`) proceeds to DIAGNOSE — VERIFY + the safety
-  gate still gate the output, and a generic question never reaches a tenant.
+  RETRIEVE→CLARIFY conditional routes to the interrupt. A triage "simple" verdict cannot skip the
+  check — an insufficient ticket never reaches DIAGNOSE unasked; an insufficient fast-path ticket
+  CLARIFYs and loops back into the FULL path (CLARIFY always re-enters `retrieve`, BL-4).
+  Deterministic guardrails, checked BEFORE the call: never when a question is already pending,
+  never after ANY clarify round (at most one check per ticket — the loop-back never re-asks a
+  tenant who already answered, and never re-pays the tax), and never on hazards —
+  `safety.gate.clarify_allowed` (pure, no LLM) blocks CLARIFY for hard-escalate trades and
+  hazard-keyword descriptions, which also skips the per-ticket sufficiency tax. Fails open: parse
+  failure or a generic question (`parse_sufficiency` rejects "please provide more details"-style
+  output, `SufficiencyParseError`) proceeds to DIAGNOSE — VERIFY + the safety gate still gate the
+  output, and a generic question never reaches a tenant.
 - **Single resume path rule** `[IMPL: src/hero/api/resume.py]` (P4-4 hardening): every resume of a
   CLARIFY-interrupted run MUST go through `hero.api.resume.resume_with_answer` — it snapshots the
   pending question *before* resuming (not recoverable from state history afterwards) and appends the
