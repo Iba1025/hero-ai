@@ -29,6 +29,28 @@ class Base(DeclarativeBase):
     pass
 
 
+class Building(Base):
+    """P4-4 public tenant intake: the unguessable slug IS the tenant link.
+
+    No tenant accounts — possession of the link is the credential (pilot
+    scale). Rows are created only via `python -m hero.buildings create`.
+    """
+
+    __tablename__ = "building"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (Index("ix_building_org_id", "org_id"),)
+
+
 class Ticket(Base):
     __tablename__ = "ticket"
 
@@ -36,12 +58,20 @@ class Ticket(Base):
         Uuid, primary_key=True, server_default=text("gen_random_uuid()")
     )
     org_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # No FK: operator-created tickets predate the building table (P4-4) and
+    # may carry building ids that have no row. Public intake always sets a
+    # real building.id.
     building_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     urgency: Mapped[str | None] = mapped_column(Text, nullable=True)
     trade: Mapped[str | None] = mapped_column(Text, nullable=True)
     complexity: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
+    # P4-4 public intake: how to reach the tenant for CLARIFY (phone or email).
+    tenant_contact: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # P4-4 public intake: unguessable per-ticket status-link slug; NULL for
+    # operator-created tickets (they have no public status page).
+    public_slug: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default="now()"
     )
@@ -64,7 +94,9 @@ class Media(Base):
     ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
     media_type: Mapped[str] = mapped_column(Text, nullable=False)
-    sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    # Nullable since P4-4: public tenants on non-HTTPS LAN phones have no
+    # crypto.subtle, so the client-side hash is best-effort, never invented.
+    sha256: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default="now()"
     )

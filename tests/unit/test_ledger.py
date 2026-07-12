@@ -203,12 +203,56 @@ def test_assemble_ledger_honest_gaps() -> None:
     assert [e["state"] for e in entries] == ["intake"]
 
 
-def test_assemble_ledger_verify_without_diagnosis_row() -> None:
-    """A verify event with no matching diagnosis row stays bare — absent, not invented."""
+def test_assemble_ledger_verify_without_diagnosis_row_trips_integrity_error() -> None:
+    """1 verify event vs 0 diagnosis rows → tripwire fires; verify stays bare."""
     entries = assemble_ledger(
         _FakeTicket(),  # type: ignore[arg-type]
         [_FakeEvent(1, "verify", {"verify_pass": False})],  # type: ignore[list-item]
         [],
         [],
     )
-    assert entries[1]["data"] == {"verify_pass": False}
+    assert [e["state"] for e in entries] == ["intake", "integrity_error", "verify"]
+    err = entries[1]["data"]
+    assert err["verify_events"] == 1
+    assert err["diagnosis_rows"] == 0
+    verify = entries[2]["data"]
+    assert verify == {"verify_pass": False}  # no fault/claims joined
+
+
+def test_assemble_ledger_count_mismatch_skips_join_entirely() -> None:
+    """Positional-join tripwire (P4-4): 2 verify events vs 1 diagnosis row.
+
+    On mismatch NOTHING is joined — a partial join would silently
+    mis-attribute claims. BL-9 (corrective loop) must revisit this.
+    """
+    events = [
+        _FakeEvent(1, "verify", {"verify_pass": True}),
+        _FakeEvent(2, "verify", {"verify_pass": True}),
+    ]
+    entries = assemble_ledger(
+        _FakeTicket(),  # type: ignore[arg-type]
+        events,  # type: ignore[arg-type]
+        [(_FakeDiag(), [_FakeClaim()])],  # type: ignore[list-item]
+        [],
+    )
+    states = [e["state"] for e in entries]
+    assert states == ["intake", "integrity_error", "verify", "verify"]
+    for verify in (entries[2]["data"], entries[3]["data"]):
+        assert "claims" not in verify
+        assert "fault" not in verify
+    err = entries[1]["data"]
+    assert err["verify_events"] == 2
+    assert err["diagnosis_rows"] == 1
+    assert "mis-attribution" in err["message"]
+
+
+def test_assemble_ledger_matched_counts_have_no_integrity_error() -> None:
+    """Equal counts → clean join, no tripwire entry."""
+    entries = assemble_ledger(
+        _FakeTicket(),  # type: ignore[arg-type]
+        [_FakeEvent(1, "verify", {"verify_pass": True})],  # type: ignore[list-item]
+        [(_FakeDiag(), [_FakeClaim()])],  # type: ignore[list-item]
+        [],
+    )
+    assert all(e["state"] != "integrity_error" for e in entries)
+    assert entries[1]["data"]["fault"] == "Failing run capacitor"

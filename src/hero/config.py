@@ -101,6 +101,21 @@ class Settings(BaseSettings):
         description="Comma-separated SPA origins allowed to send credentialed requests",
     )
 
+    # ── Public tenant intake (P4-4) — abuse basics, no CAPTCHA at pilot ──
+    public_intake_rate_per_hour: int = Field(
+        default=10, description="Ticket submissions per building link per hour"
+    )
+    public_presign_rate_per_hour: int = Field(
+        default=30, description="Photo presigns per building link per hour"
+    )
+    public_answer_rate_per_hour: int = Field(
+        default=20, description="Clarify answers per ticket status link per hour"
+    )
+    public_max_photos: int = Field(default=6, description="Max photos per public ticket")
+    public_max_photo_bytes: int = Field(
+        default=10 * 1024 * 1024, description="Max declared photo size for a public presign"
+    )
+
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──
     embedder_impl: Literal["colmodernvbert", "colqwen3", "stub"] = Field(default="stub")
     reranker_impl: Literal["bge", "cohere", "stub"] = Field(default="stub")

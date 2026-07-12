@@ -136,6 +136,13 @@ def assemble_ledger(
     onto verify entries positionally: the nth verify event corresponds to the
     nth diagnosis row — both exist exactly once per completed run, in order.
     (run_id cannot disambiguate: create and resume share one thread id.)
+
+    Tripwire (P4-4 hardening): the positional join is only performed when
+    verify-event count == diagnosis-row count. On mismatch, the join is
+    skipped entirely and a loud `integrity_error` entry is emitted — never
+    a silent mis-attribution. BL-9 (corrective retrieval loop) must revisit
+    this join: a loop that runs VERIFY more than once per run breaks the
+    one-verify-per-completed-run assumption the join rests on.
     """
     entries: list[dict[str, Any]] = [
         {
@@ -146,11 +153,30 @@ def assemble_ledger(
         }
     ]
 
+    n_verify = sum(1 for ev in events if ev.state == "verify")
+    join_ok = n_verify == len(diagnoses_with_claims)
+    if not join_ok:
+        entries.append(
+            {
+                "state": "integrity_error",
+                "ts": ticket.created_at.isoformat(),
+                "run_id": None,
+                "data": {
+                    "verify_events": n_verify,
+                    "diagnosis_rows": len(diagnoses_with_claims),
+                    "message": (
+                        "verify-event count != diagnosis-row count; "
+                        "claim join skipped to avoid mis-attribution"
+                    ),
+                },
+            }
+        )
+
     verify_i = 0
     for ev in events:
         data: dict[str, Any] = dict(ev.payload)
         if ev.state == "verify":
-            if verify_i < len(diagnoses_with_claims):
+            if join_ok:
                 diag, claims = diagnoses_with_claims[verify_i]
                 data["fault"] = diag.fault
                 data["diagnosis_id"] = str(diag.id)

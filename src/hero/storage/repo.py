@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hero.storage.models import (
+    Building,
     ContractorStatement,
     Diagnosis,
     DiagnosisClaim,
@@ -27,11 +28,48 @@ async def create_ticket(
     org_id: uuid.UUID,
     building_id: uuid.UUID,
     description: str,
+    tenant_contact: str | None = None,
+    public_slug: str | None = None,
 ) -> Ticket:
-    ticket = Ticket(org_id=org_id, building_id=building_id, description=description)
+    ticket = Ticket(
+        org_id=org_id,
+        building_id=building_id,
+        description=description,
+        tenant_contact=tenant_contact,
+        public_slug=public_slug,
+    )
     session.add(ticket)
     await session.flush()
     return ticket
+
+
+async def create_building(
+    session: AsyncSession, *, org_id: uuid.UUID, name: str, slug: str
+) -> Building:
+    building = Building(org_id=org_id, name=name, slug=slug)
+    session.add(building)
+    await session.flush()
+    return building
+
+
+async def get_building_by_slug(session: AsyncSession, slug: str) -> Building | None:
+    """Public-intake building lookup (P4-4): the unguessable slug is the credential."""
+    result = await session.execute(select(Building).where(Building.slug == slug))
+    return result.scalar_one_or_none()
+
+
+async def list_buildings(session: AsyncSession, org_id: uuid.UUID | None = None) -> list[Building]:
+    query = select(Building).order_by(Building.created_at)
+    if org_id is not None:
+        query = query.where(Building.org_id == org_id)
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_ticket_by_public_slug(session: AsyncSession, public_slug: str) -> Ticket | None:
+    """Public status lookup (P4-4): scoped to exactly one ticket by its own slug."""
+    result = await session.execute(select(Ticket).where(Ticket.public_slug == public_slug))
+    return result.scalar_one_or_none()
 
 
 async def get_ticket(session: AsyncSession, ticket_id: uuid.UUID) -> Ticket | None:
@@ -125,7 +163,7 @@ async def create_media(
     ticket_id: uuid.UUID,
     object_key: str,
     media_type: str,
-    sha256: str,
+    sha256: str | None,
 ) -> Media:
     media = Media(ticket_id=ticket_id, object_key=object_key, media_type=media_type, sha256=sha256)
     session.add(media)

@@ -10,21 +10,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hero.api.deps import AuthUser, get_current_user, get_db_session, get_graph, require_role
-from hero.storage.ledger import assemble_ledger, events_from_state
+from hero.api.pipeline import run_and_persist
+from hero.api.resume import NotAwaitingClarificationError, resume_with_answer
+from hero.storage.ledger import assemble_ledger
 from hero.storage.models import Ticket
 from hero.storage.repo import (
-    append_ticket_events,
+    create_ticket as repo_create_ticket,
+)
+from hero.storage.repo import (
     get_diagnoses_with_claims,
     get_statements_for_ticket,
     get_ticket_for_org,
     list_ticket_events,
     list_tickets_for_org,
-    persist_diagnosis_from_state,
-    stamp_ticket_triage,
-    update_ticket_status,
-)
-from hero.storage.repo import (
-    create_ticket as repo_create_ticket,
 )
 
 router = APIRouter()
@@ -80,7 +78,11 @@ async def create_ticket(
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
     user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> CreateTicketResponse:
-    """Create a ticket row, run the graph, persist diagnosis + claims (DEC-6)."""
+    """Create a ticket row, run the graph, persist diagnosis + claims (DEC-6).
+
+    Persistence goes through the shared pipeline (hero.api.pipeline) — the
+    same one the public tenant intake uses (P4-4).
+    """
     graph = await get_graph()
 
     ticket = await repo_create_ticket(
@@ -89,46 +91,17 @@ async def create_ticket(
         building_id=uuid.UUID(request.building_id),
         description=request.description,
     )
-    ticket_id = str(ticket.id)
-    thread_id = f"ticket-{ticket_id}"
-
-    config = {"configurable": {"thread_id": thread_id}}
-
-    input_state: dict[str, Any] = {
-        "ticket_id": ticket_id,
-        "description": request.description,
-        "media": request.media,
-        "sensor_readings": request.sensor_readings,
-    }
-
-    result = await graph.ainvoke(input_state, config=config)
-
-    status = "diagnosed"
-    if result.get("escalated"):
-        status = "escalated"
-    elif result.get("pending_question"):
-        status = "clarifying"
-
-    # Per-claim results → diagnosis_claim (BL-6). No-op while CLARIFY-interrupted.
-    await persist_diagnosis_from_state(session, ticket_id=ticket.id, run_id=thread_id, state=result)
-    # Ledger journal (P4-3): one row per pipeline state that actually ran.
-    await append_ticket_events(
-        session, ticket_id=ticket.id, run_id=thread_id, events=events_from_state(result)
-    )
-    # Triage runs before any CLARIFY interrupt, so trade/urgency are final here (P4-2).
-    await stamp_ticket_triage(
+    status = await run_and_persist(
+        graph,
         session,
-        ticket.id,
-        trade=result.get("trade"),
-        urgency=result.get("urgency"),
-        complexity=result.get("complexity"),
+        ticket,
+        media=request.media,
+        sensor_readings=request.sensor_readings,
     )
-    await update_ticket_status(session, ticket.id, status)
-    await session.commit()
 
     return CreateTicketResponse(
-        ticket_id=ticket_id,
-        thread_id=thread_id,
+        ticket_id=str(ticket.id),
+        thread_id=f"ticket-{ticket.id}",
         status=status,
     )
 
@@ -271,48 +244,17 @@ async def clarify_answer(
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
     user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> dict[str, str]:
-    """Resume an interrupted run with a clarification answer. Org-scoped (P4-1)."""
-    await _require_ticket_in_org(session, ticket_id, user)
+    """Resume an interrupted run with a clarification answer. Org-scoped (P4-1).
+
+    Delegates to the single resume path (hero.api.resume, spec §4) — the only
+    place a resume may happen, so the ledger always records the round.
+    """
+    ticket = await _require_ticket_in_org(session, ticket_id, user)
     graph = await get_graph()
-    thread_id = f"ticket-{ticket_id}"
-    config = {"configurable": {"thread_id": thread_id}}
-
-    state = await graph.aget_state(config)
-    if state is None or not state.values:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-
-    question = state.values.get("pending_question")
-    if not question:
-        raise HTTPException(status_code=400, detail="Ticket is not awaiting clarification")
-
-    # Resume the graph with the answer via Command
-    from langgraph.types import Command
-
-    result = await graph.ainvoke(Command(resume=request.answer), config=config)
-
-    # Ledger (P4-3): record the answered round, then whatever the resume ran.
-    events: list[tuple[str, dict[str, Any]]] = [
-        (
-            "clarify_answered",
-            {
-                "question": question,
-                "answer": request.answer,
-                "round": int(result.get("clarify_rounds") or 0),
-            },
-        )
-    ]
-    events += events_from_state(result, resumed=True)
-    await append_ticket_events(
-        session, ticket_id=uuid.UUID(ticket_id), run_id=thread_id, events=events
-    )
-
-    # Run may now be complete — persist diagnosis + per-claim results (BL-6).
-    if not result.get("pending_question"):
-        await persist_diagnosis_from_state(
-            session, ticket_id=uuid.UUID(ticket_id), run_id=thread_id, state=result
-        )
-        status = "escalated" if result.get("escalated") else "diagnosed"
-        await update_ticket_status(session, uuid.UUID(ticket_id), status)
-    await session.commit()
-
+    try:
+        await resume_with_answer(graph, session, ticket_id=ticket.id, answer=request.answer)
+    except NotAwaitingClarificationError as exc:
+        if exc.state_missing:
+            raise HTTPException(status_code=404, detail="Ticket not found") from exc
+        raise HTTPException(status_code=400, detail="Ticket is not awaiting clarification") from exc
     return {"status": "resumed", "ticket_id": ticket_id}

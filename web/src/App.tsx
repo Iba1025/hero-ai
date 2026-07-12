@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
+import { Intake } from "./screens/Intake";
 import { Ledger } from "./screens/Ledger";
 import { Login } from "./screens/Login";
 import { Outcome } from "./screens/Outcome";
+import { StatusPage } from "./screens/Status";
 import { TicketList } from "./screens/TicketList";
 import type { Me } from "./types";
 
@@ -47,6 +49,13 @@ export function App() {
   const onAuthError = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) setMe(null);
   }, []);
+
+  // Public tenant routes (P4-4): no account, no login — the unguessable slug
+  // in the URL is the credential. Checked before any auth gating.
+  const intakeMatch = /^#\/intake\/([A-Za-z0-9_-]+)$/.exec(route);
+  if (intakeMatch) return <Intake slug={intakeMatch[1]} />;
+  const statusMatch = /^#\/status\/([A-Za-z0-9_-]+)$/.exec(route);
+  if (statusMatch) return <StatusPage slug={statusMatch[1]} />;
 
   if (checking) {
     return <div className="center muted">Loading…</div>;

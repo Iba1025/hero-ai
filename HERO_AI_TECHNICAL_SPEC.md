@@ -103,12 +103,15 @@ hero/
 │   ├── ingestion/                 # manual corpus → Qdrant (offline job)
 │   ├── observability/             # Langfuse wiring, trace decorators
 │   ├── auth/                      # P4-1: argon2id passwords, JWT sessions, seed CLI (python -m hero.auth seed)
-│   └── api/                       # FastAPI routers: auth, tickets, uploads, outcomes
+│   ├── buildings.py               # P4-4: admin CLI — create buildings, print tenant intake links (python -m hero.buildings)
+│   └── api/                       # FastAPI routers: auth, tickets, uploads, outcomes, public (P4-4 tenant intake)
+│                                  #   + pipeline.py (shared run+persist), resume.py (single resume path, §4), ratelimit.py
 ├── evals/                         # BL-3 regression suite (§10)
 │   ├── golden_tickets/            # labeled ticket fixtures (JSON)
 │   └── run_eval.py
 ├── web/                           # P4-2 cockpit SPA (Vite + React + TS, dependency-light)
-│   └── src/                       # screens/: Login, TicketList, Outcome (contractor), Ledger (operator, P4-3)
+│   └── src/                       # screens/: Login, TicketList, Outcome (contractor), Ledger (operator, P4-3),
+│                                  #   Intake + Status (public tenant, P4-4 — hash routes, no auth)
 └── tests/
     ├── unit/
     ├── integration/
@@ -214,6 +217,14 @@ class TicketState(BaseModel):
 - Checkpointer: `PostgresSaver` on `DATABASE_URL`. Every node runs under it (INV-6).
 - `CLARIFY` uses `interrupt()` — the graph pauses, `pending_question` is surfaced via API,
   human answer resumes the run at RETRIEVE. `clarify_rounds >= 3` → route to human dispatcher, not another loop.
+- **Single resume path rule** `[IMPL: src/hero/api/resume.py]` (P4-4 hardening): every resume of a
+  CLARIFY-interrupted run MUST go through `hero.api.resume.resume_with_answer` — it snapshots the
+  pending question *before* resuming (not recoverable from state history afterwards) and appends the
+  `clarify_answered` + resumed-run events to the ledger. The API graph wrapper
+  (`deps.get_graph` → `_ResumeGuardedGraph`) raises `ResumeNotAllowedError` on any other
+  `Command(resume=…)`, so an out-of-path resume fails loudly instead of leaving the ledger missing
+  the question. The offline eval builds its own graph via `build_graph` and is exempt — it writes no
+  ledger rows.
 - Conditional edges: `TRIAGE → {retrieve_fast | retrieve}` on `complexity` (BL-4) —
   two distinct graph nodes (`retrieve_fast` = `make_retrieve(..., fast_path=True)`), so the
   taken path is visible in checkpoints and eval traces; CLARIFY always loops back to full
@@ -235,15 +246,18 @@ CREATE TABLE ticket (
     trade           TEXT,
     complexity      TEXT,
     status          TEXT NOT NULL DEFAULT 'open',   -- open|clarifying|escalated|resolved|closed
+    tenant_contact  TEXT,                 -- P4-4 public intake: phone/email for the CLARIFY loop [IMPL: alembic/versions/0006_building_public_intake.py]
+    public_slug     TEXT UNIQUE,          -- P4-4: unguessable per-ticket status link; NULL for operator-created tickets
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX ON ticket (public_slug);
 
 CREATE TABLE media (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id       UUID NOT NULL REFERENCES ticket(id),
     object_key      TEXT NOT NULL,        -- R2 pointer ONLY (INV-3)
     media_type      TEXT NOT NULL,
-    sha256          TEXT NOT NULL,
+    sha256          TEXT,                 -- nullable since P4-4: public phone uploads on http LAN have no crypto.subtle; best-effort, never invented
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -332,6 +346,18 @@ CREATE INDEX ON ticket_event (ticket_id, seq);
 -- Append-only, written by the API layer after a graph run (nodes never touch the DB).
 -- Ledger assembly (storage/ledger.py) synthesizes intake from the ticket row and outcome
 -- from contractor_statement; states that never ran produce no rows (honest gaps).
+
+CREATE TABLE building (                   -- P4-4 tenant intake [IMPL: alembic/versions/0006_building_public_intake.py]
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id          UUID NOT NULL,
+    name            TEXT NOT NULL,
+    slug            TEXT NOT NULL UNIQUE, -- unguessable (token_urlsafe(24)); IS the tenant credential — no accounts, no login
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ON building (org_id);
+-- Rows created only via `python -m hero.buildings create` (prints the intake link).
+-- ticket.building_id keeps NO FK to this table: operator tickets predate it and carry
+-- caller-supplied building ids; public intake always sets a real building.id.
 ```
 
 LangGraph checkpoint tables: managed by `langgraph-checkpoint-postgres` — do not hand-edit.

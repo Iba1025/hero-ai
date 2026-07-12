@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from hero.api.routers import auth, outcomes, tickets, uploads
+from hero.api.routers import auth, outcomes, public, tickets, uploads
 from hero.config import get_settings, region_guard
 from hero.observability import flush
 
@@ -52,6 +52,10 @@ def create_app() -> FastAPI:
     app.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
     app.include_router(outcomes.router, prefix="/outcomes", tags=["outcomes"])
     app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
+    # PUBLIC (P4-4): tenant intake + status — deliberately unauthenticated.
+    # The unguessable slug is the credential; the router exposes nothing
+    # org-scoped beyond a building name and a ticket's own plain status.
+    app.include_router(public.router, prefix="/public", tags=["public"])
 
     return app
 

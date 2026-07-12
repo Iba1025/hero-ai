@@ -29,6 +29,7 @@ const STATE_LABELS: Record<string, string> = {
   safety_gate: "Safety gate",
   procure: "Procure",
   outcome: "Contractor outcome",
+  integrity_error: "Integrity error",
 };
 
 function Cite({ c }: { c: Record<string, unknown> }) {
@@ -135,6 +136,17 @@ function EntryBody({ entry, isLast }: { entry: LedgerEntry; isLast: boolean }) {
               </span>
             </div>
           ))}
+        </div>
+      );
+
+    case "integrity_error":
+      // Positional-join tripwire (P4-4 hardening): counts diverged, so claim
+      // details are withheld server-side rather than silently mis-attributed.
+      return (
+        <div className="banner escalated">
+          ⚠ LEDGER INTEGRITY ERROR — {num(d.verify_events) ?? "?"} verify event(s) vs{" "}
+          {num(d.diagnosis_rows) ?? "?"} diagnosis row(s). Claim details withheld to avoid
+          mis-attribution.
         </div>
       );
 

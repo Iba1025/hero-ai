@@ -16,6 +16,7 @@ from hero.adapters.stub_catalog import StubCatalogResolver
 from hero.adapters.stub_embedder import StubEmbedder
 from hero.adapters.stub_reranker import StubReranker
 from hero.adapters.stub_vlm import StubVLM
+from hero.api.resume import ResumeNotAllowedError, resume_sanctioned
 from hero.auth.tokens import TokenError, decode_session_token
 from hero.config import Settings, get_settings
 from hero.graph.build import build_graph
@@ -128,14 +129,37 @@ async def make_checkpointer(settings: Settings) -> Any:
     return saver
 
 
+class _ResumeGuardedGraph:
+    """Single resume path rule (P4-4, spec §4): out-of-path resumes fail loudly.
+
+    Delegates everything to the compiled graph except `ainvoke` of a
+    Command(resume=...), which must come through hero.api.resume — the only
+    path that snapshots the pending question and writes the ledger round.
+    """
+
+    def __init__(self, graph: Any) -> None:
+        self._graph = graph
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._graph, name)
+
+    async def ainvoke(self, run_input: Any, *args: Any, **kwargs: Any) -> Any:
+        if getattr(run_input, "resume", None) is not None and not resume_sanctioned():
+            raise ResumeNotAllowedError(
+                "Resume outside the single resume path — use "
+                "hero.api.resume.resume_with_answer so the ledger records the round"
+            )
+        return await self._graph.ainvoke(run_input, *args, **kwargs)
+
+
 async def get_graph() -> Any:
-    """Build the compiled graph.
+    """Build the compiled graph, wrapped in the single-resume-path guard.
 
     Uses AsyncPostgresSaver checkpointer (INV-6) — fails loudly without DATABASE_URL.
     """
     settings = get_settings()
     checkpointer = await make_checkpointer(settings)
-    return build_graph(
+    graph = build_graph(
         embedder=StubEmbedder(),
         reranker=StubReranker(),
         calibrator=make_calibrator(settings),
@@ -145,3 +169,4 @@ async def get_graph() -> Any:
         grounding_threshold=settings.grounding_threshold,
         grounding_threshold_strict=settings.grounding_threshold_strict,
     )
+    return _ResumeGuardedGraph(graph)

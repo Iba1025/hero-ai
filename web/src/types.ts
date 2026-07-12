@@ -68,6 +68,32 @@ export interface LedgerResponse {
   entries: LedgerEntry[];
 }
 
+// ---- public tenant intake (P4-4) — no auth, slug is the credential ----
+
+export interface PublicPresignResponse {
+  upload_url: string;
+  object_key: string;
+}
+
+export interface PublicPhoto {
+  object_key: string;
+  content_type: string;
+  sha256?: string | null;
+}
+
+export interface PublicIntakeResponse {
+  status_slug: string;
+  status_path: string;
+}
+
+export interface PublicStatus {
+  // Plain-language phrase from the server, e.g. "received", "question for you".
+  state: string;
+  question: string | null;
+  description: string;
+  created_at: string;
+}
+
 export type Verdict = "confirmed" | "partially_correct" | "wrong";
 
 export interface OutcomeRequest {

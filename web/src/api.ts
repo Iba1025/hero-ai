@@ -3,6 +3,10 @@ import type {
   Me,
   OutcomeRequest,
   OutcomeResponse,
+  PublicIntakeResponse,
+  PublicPhoto,
+  PublicPresignResponse,
+  PublicStatus,
   TicketDetail,
   TicketSummary,
 } from "./types";
@@ -45,4 +49,35 @@ export const api = {
   getLedger: (id: string) => request<LedgerResponse>(`/tickets/${id}/ledger`),
   fileOutcome: (body: OutcomeRequest) =>
     request<OutcomeResponse>("/outcomes", { method: "POST", body: JSON.stringify(body) }),
+
+  // ---- public tenant intake (P4-4): no session, the slug is the credential ----
+  publicBuilding: (slug: string) =>
+    request<{ name: string }>(`/public/buildings/${encodeURIComponent(slug)}`),
+  publicPresign: (slug: string, body: { filename: string; content_type: string; size_bytes: number }) =>
+    request<PublicPresignResponse>(`/public/buildings/${encodeURIComponent(slug)}/presign`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  publicIntake: (slug: string, body: { description: string; contact: string; photos: PublicPhoto[] }) =>
+    request<PublicIntakeResponse>(`/public/buildings/${encodeURIComponent(slug)}/tickets`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  publicStatus: (statusSlug: string) =>
+    request<PublicStatus>(`/public/status/${encodeURIComponent(statusSlug)}`),
+  publicAnswer: (statusSlug: string, answer: string) =>
+    request<PublicStatus>(`/public/status/${encodeURIComponent(statusSlug)}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ answer }),
+    }),
 };
+
+/** Direct-to-R2 PUT (INV-3): media bytes never touch our server. */
+export async function uploadToPresigned(url: string, file: File): Promise<void> {
+  const resp = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  if (!resp.ok) throw new ApiError(resp.status, "Photo upload failed");
+}

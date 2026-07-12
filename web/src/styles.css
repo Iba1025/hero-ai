@@ -428,6 +428,14 @@ textarea {
   background: var(--accent);
 }
 
+.ledger-entry.integrity_error {
+  border-color: var(--bad);
+}
+
+.ledger-entry.integrity_error::before {
+  background: var(--bad);
+}
+
 .entry-head {
   display: flex;
   align-items: baseline;
@@ -503,6 +511,28 @@ textarea {
   font-weight: 800;
   letter-spacing: -0.02em;
   margin-bottom: 4px;
+}
+
+/* ---- public tenant screens (P4-4) ---- */
+
+.status-phrase {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  text-transform: capitalize;
+}
+
+.linkbox {
+  display: inline-block;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  word-break: break-all;
+  text-align: left;
 }
 
 .back-btn {

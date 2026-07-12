@@ -186,6 +186,7 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 | **BL-10** | Conformal prediction sets at SAFETY_GATE (DEC-14) | 1–2 q | Needs calibration data; strongest new safety primitive |
 | **BL-11** | Deterministic procurement compatibility hard-filters (DEC-12) | | With procurement plane build-out; blocked partly on OPEN-1 |
 | **BL-13** | Per-contractor ticket assignment (DEC-22): `contractor_id` on ticket, assignment action in the operator UI, contractor list filtered to assigned tickets | days | Phase 5 — pilot is org-scoped visibility; needed once orgs run multiple crews |
+| **BL-14** | ⏸ Per-node timestamps in the ledger (node-level instrumentation feeding `ticket_event`) | deferred, low priority | Ledger events currently share the run-completion timestamp, ordered by `seq`; Langfuse spans already cover ops timing — this is an audit-artifact nicety, not a gap |
 | **BL-7** | ⏸ Region-level evidence grounding (patch-to-region) | deferred | Post-traction audit-artifact upgrade |
 | **BL-8** | ⏸ DuckDB/Parquet analytics split (DEC-4) | deferred | When flywheel scans compete with live traffic |
 

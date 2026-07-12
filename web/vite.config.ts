@@ -11,7 +11,10 @@ export default defineConfig({
   server: {
     host: true, // reachable from a phone on the same network
     proxy: Object.fromEntries(
-      ["/auth", "/tickets", "/outcomes", "/uploads"].map((p) => [p, { target, changeOrigin: true }]),
+      ["/auth", "/tickets", "/outcomes", "/uploads", "/public"].map((p) => [
+        p,
+        { target, changeOrigin: true },
+      ]),
     ),
   },
 });
