@@ -91,7 +91,9 @@ def build_graph(
     """
     # Create node functions with injected adapters
     triage_fn = make_triage(vlm)
-    retrieve_fn = make_retrieve(embedder, reranker, qdrant_client=qdrant_client)
+    # Full path gets the VLM for the P4-5 sufficiency check; the fast path
+    # never does — simple tickets don't pay the per-ticket sufficiency tax.
+    retrieve_fn = make_retrieve(embedder, reranker, qdrant_client=qdrant_client, vlm=vlm)
     retrieve_fast_fn = make_retrieve(
         embedder, reranker, qdrant_client=qdrant_client, fast_path=True
     )

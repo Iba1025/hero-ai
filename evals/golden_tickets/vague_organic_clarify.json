@@ -1,0 +1,32 @@
+{
+  "ticket_id": "EVAL-006",
+  "description": "Something in our unit is broken and it keeps making a strange rattling sound at night. No idea what it is.",
+  "media": [],
+  "sensor_readings": [],
+  "expected_complexity": "standard",
+  "expected": {
+    "trade": "other",
+    "urgency": "routine",
+    "escalated": false,
+    "has_diagnosis": true,
+    "has_work_order": true,
+    "has_sku": true,
+    "expected_clarify": true,
+    "clarify_answer": "It turned out to be the pipe under the kitchen sink - the curved section drips and rattles whenever water runs."
+  },
+  "label": {
+    "actual_fault": "Corroded P-trap joint",
+    "verdict": "confirmed"
+  },
+  "expected_claims": {
+    "min_grounding_rate": 0.5,
+    "note": "P4-5 (INV-5): engineered to ORGANICALLY trigger CLARIFY - vague description, unresolvable trade, no fixture-relevant tokens until the tenant answers. No pending_question is injected; the sufficiency check must raise the question itself (expected_clarify=true is a gating eval check via clarify_behavior_correct). After the answer, retrieval re-runs on the clarified description and claims should ground against tests/fixtures/test_plumbing_manual.pdf in --live."
+  },
+  "expected_evidence": [
+    {
+      "doc_id": "test-manual",
+      "pages": [0, 2],
+      "note": "P-Trap chapter (p0) and troubleshooting (p2) become reachable only AFTER the clarification round adds pipe/sink/drip tokens - requires --live retrieval with the fixture ingested"
+    }
+  ]
+}

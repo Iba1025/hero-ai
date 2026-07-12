@@ -267,7 +267,11 @@ async def run_ticket(
         "sensor_readings": ticket.get("sensor_readings", []),
     }
 
-    if expected.get("requires_clarify"):
+    # Legacy injected-CLARIFY path (EVAL-002/005): exercises checkpoint resume
+    # across a simulated restart. Organic CLARIFY (P4-5, expected_clarify) is
+    # NOT injected — the sufficiency check must raise the question itself.
+    injected = bool(expected.get("requires_clarify"))
+    if injected:
         input_state["pending_question"] = "Can you provide more details?"
 
     # Reset the adapter's usage counters so cost is attributed per ticket.
@@ -282,9 +286,15 @@ async def run_ticket(
     graph1 = _build_graph(checkpointer, adapters)
     result = await _stream_collect(graph1, input_state, config, node_latency)
 
-    # If CLARIFY interrupted, simulate process restart
-    if expected.get("requires_clarify") and result.get("pending_question"):
-        print(f"  [CLARIFY] Graph interrupted. pending_question={result['pending_question']!r}")
+    # If CLARIFY interrupted (injected OR organic via P4-5 sufficiency),
+    # simulate a process restart and resume with the annotated answer.
+    clarify_question: str | None = None
+    organic_clarify = False
+    if result.get("pending_question"):
+        clarify_question = result["pending_question"]
+        organic_clarify = not injected
+        origin = "organic (P4-5 sufficiency)" if organic_clarify else "injected"
+        print(f"  [CLARIFY] Graph interrupted ({origin}). pending_question={clarify_question!r}")
         print("  [CLARIFY] Destroying graph instance (simulating process termination)...")
 
         # Destroy graph1
@@ -318,6 +328,8 @@ async def run_ticket(
         "elapsed_s": elapsed,
         "node_latency": node_latency,
         "cost_by_tier": cost_by_tier,
+        "clarify_question": clarify_question,
+        "organic_clarify": organic_clarify,
         "expected": expected,
         "expected_complexity": ticket.get("expected_complexity"),
         "expected_evidence": ticket.get("expected_evidence"),
@@ -352,6 +364,15 @@ def evaluate(run_result: dict[str, Any], *, live: bool = False) -> dict[str, Any
     checks["routing_mismatch"] = (
         checks["expected_complexity"] is not None
         and result.get("complexity") != checks["expected_complexity"]
+    )
+
+    # P4-5 eval gate: organic CLARIFY must fire exactly when annotated —
+    # a golden ticket that passes without questions must never regress into
+    # question-asking, and EVAL-006 must organically ask.
+    checks["organic_clarify"] = run_result.get("organic_clarify", False)
+    checks["clarify_question"] = run_result.get("clarify_question")
+    checks["clarify_behavior_correct"] = checks["organic_clarify"] == bool(
+        expected.get("expected_clarify")
     )
 
     if expected.get("escalation_reason"):
@@ -431,6 +452,8 @@ def evaluate(run_result: dict[str, Any], *, live: bool = False) -> dict[str, Any
         checks.get("diagnosis_present", True),
         # BL-4: gated only when the golden ticket pins an expected complexity.
         checks.get("complexity_match", True),
+        # P4-5: organic CLARIFY regression gate.
+        checks.get("clarify_behavior_correct", True),
     ]
     checks["pass"] = all(critical_checks)
 
@@ -496,6 +519,9 @@ async def main() -> int:
                 f"work_order_id={result.get('work_order_id') is not None} "
                 f"sku={result.get('sku') is not None}"
             )
+            if checks["clarify_question"]:
+                origin = "organic" if checks["organic_clarify"] else "injected"
+                print(f"  clarify[{origin}]: {checks['clarify_question']!r}")
             print(
                 f"  grounding_rate={checks['grounding_rate']} "
                 f"by_type={checks['grounding_rate_by_type']} "
@@ -512,7 +538,8 @@ async def main() -> int:
                     print(
                         f"    cost[{tier}]: ${usage['cost_usd']:.4f} "
                         f"({usage['calls']:.0f} calls, "
-                        f"{usage['prompt_tokens']:.0f}/{usage['completion_tokens']:.0f} tok)"
+                        f"{usage['prompt_tokens']:.0f}/{usage['completion_tokens']:.0f} tok, "
+                        f"{usage.get('latency_s', 0.0):.2f}s)"
                     )
             if checks["node_latency_s"]:
                 node_parts = " ".join(
@@ -576,6 +603,31 @@ async def main() -> int:
             f"  {path}: n={len(rs)} avg_latency={avg_lat:.3f}s "
             f"avg_cost=${avg_cost:.4f} avg_{retrieve_node}={r_lat}"
         )
+
+    # P4-5d: the sufficiency check is a per-ticket tax on the full path —
+    # report its cost/latency and flag if it exceeds ~$0.01 or ~2s/ticket.
+    print("\nSufficiency check (P4-5d — per-ticket tax on the full path):")
+    suff = [r for r in all_results if "verify/sufficiency" in r.get("cost_by_tier", {})]
+    if suff:
+        n = len(suff)
+        avg_calls = sum(r["cost_by_tier"]["verify/sufficiency"]["calls"] for r in suff) / n
+        avg_cost = sum(r["cost_by_tier"]["verify/sufficiency"]["cost_usd"] for r in suff) / n
+        avg_lat = (
+            sum(r["cost_by_tier"]["verify/sufficiency"].get("latency_s", 0.0) for r in suff) / n
+        )
+        print(
+            f"  n={n} tickets paid the check: avg calls={avg_calls:.1f} "
+            f"avg cost=${avg_cost:.4f} avg latency={avg_lat:.2f}s"
+        )
+        if avg_cost > 0.01 or avg_lat > 2.0:
+            print(
+                "  FLAG: sufficiency tax exceeds ~$0.01 or ~2s per ticket — review before shipping"
+            )
+    else:
+        reason = (
+            "no full-path ticket paid the check" if args.live else "stub adapters accrue no usage"
+        )
+        print(f"  n/a ({reason})")
 
     # P3-4 rider: routing stability vs expected_complexity annotations.
     # NON-GATING — tracked so triage drift is a metric, not an anecdote.

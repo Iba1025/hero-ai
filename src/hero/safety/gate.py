@@ -43,6 +43,23 @@ def safety_check(
     return SafetyDecision(escalate=False, reason=None)
 
 
+def clarify_allowed(*, trade: str | None, description: str) -> bool:
+    """Deterministic CLARIFY guardrail (P4-5b, INV-1).
+
+    Never ask a tenant questions about a hazard: hard-escalate trades and
+    hazard-keyword descriptions go straight through to DIAGNOSE → VERIFY →
+    SAFETY_GATE (which will escalate them). Asking a tenant to clarify a gas
+    leak is a safety anti-pattern — a human dispatcher acts, not a chatbot.
+
+    Pure function, no LLM, confidence not an input (INV-1). The RETRIEVE
+    node consults this BEFORE the sufficiency VLM call, so hazard tickets
+    also never pay the sufficiency-check tax.
+    """
+    if trade in HARD_ESCALATE_TRADES:
+        return False
+    return not _any_hazard_keywords(description, [])
+
+
 def _any_hazard_keywords(description: str, hypotheses: list[dict[str, Any]]) -> bool:
     """Scan description and hypothesis faults for hazard keywords."""
     text = description.lower()

@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 
 import litellm
 from pydantic import ValidationError
 
-from hero.graph.state import Claim, Hypothesis, TicketState, TriageResult
-from hero.interfaces.vlm import DiagnosisParseError, TriageParseError
+from hero.graph.state import Claim, Hypothesis, SufficiencyResult, TicketState, TriageResult
+from hero.interfaces.vlm import DiagnosisParseError, SufficiencyParseError, TriageParseError
 from hero.verification.claims import gather_evidence_text
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,28 @@ _DIAGNOSE_PROMPT = _load_prompt("diagnose")
 _DECOMPOSE_PROMPT = _load_prompt("decompose_claims")
 _ENTAILMENT_PROMPT = _load_prompt("check_entailment")
 _TRIAGE_PROMPT = _load_prompt("triage")
+_SUFFICIENCY_PROMPT = _load_prompt("sufficiency")
+
+# Generic-question markers (P4-5): an "insufficient" verdict whose question
+# contains any of these is rejected at parse time — it must never reach a
+# tenant. The prompt bans them; this is the deterministic backstop.
+_GENERIC_QUESTION_MARKERS: tuple[str, ...] = (
+    "more detail",
+    "more information",
+    "additional detail",
+    "additional information",
+    "please provide",
+    "please describe",
+    "can you clarify",
+    "could you clarify",
+    "can you describe",
+    "could you describe",
+    "tell me more",
+    "tell us more",
+    "elaborate",
+    "describe the issue",
+    "describe the problem",
+)
 
 
 def parse_triage(raw: str) -> TriageResult:
@@ -122,6 +145,38 @@ def parse_diagnosis(raw: str) -> list[Hypothesis]:
     return hypotheses
 
 
+def parse_sufficiency(raw: str) -> SufficiencyResult:
+    """Strictly parse a sufficiency response (P4-5).
+
+    The generic-question gate is part of parsing: an insufficient verdict
+    whose question is missing, too short, or generic raises
+    SufficiencyParseError — the RETRIEVE node fails open to DIAGNOSE.
+    A generic question must never be surfaced to a tenant.
+    """
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SufficiencyParseError(f"sufficiency response is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SufficiencyParseError(f"sufficiency response is not an object: {data!r:.200}")
+    try:
+        result = SufficiencyResult.model_validate(data)
+    except ValidationError as exc:
+        raise SufficiencyParseError(f"sufficiency response failed validation: {exc}") from exc
+
+    if result.sufficient:
+        # A stray question alongside sufficient=true is dropped, never surfaced.
+        return SufficiencyResult(sufficient=True)
+
+    question = (result.question or "").strip()
+    if len(question) < 10:
+        raise SufficiencyParseError(f"insufficient verdict without a usable question: {question!r}")
+    lowered = question.lower()
+    if any(marker in lowered for marker in _GENERIC_QUESTION_MARKERS):
+        raise SufficiencyParseError(f"generic question rejected: {question!r}")
+    return SufficiencyResult(sufficient=False, question=question)
+
+
 class LiteLLMVLM:
     """VLM Protocol implementation using LiteLLM for tiered model routing.
 
@@ -165,6 +220,7 @@ class LiteLLMVLM:
         Model IDs are config-driven (DEC-18), so we omit it for all tiers
         rather than special-casing model names.
         """
+        t0 = time.monotonic()
         try:
             logger.info("[VLM] tier=%s model=%s", tier, model)
             response = await litellm.acompletion(
@@ -175,7 +231,7 @@ class LiteLLMVLM:
             )
             content: str = response.choices[0].message.content or ""
             logger.info("[VLM] tier=%s model=%s served_by=%s", tier, model, response.model)
-            self._log_cost(response, tier)
+            self._log_cost(response, tier, time.monotonic() - t0)
             return content
         except Exception:
             logger.warning(
@@ -191,10 +247,12 @@ class LiteLLMVLM:
             )
             content = response.choices[0].message.content or ""
             logger.info("[VLM] tier=%s served_by=%s (fallback)", tier, self._fallback)
-            self._log_cost(response, tier)
+            # Elapsed includes the failed primary attempt — the wall time the
+            # ticket actually paid, which is what the eval reports (P4-5d).
+            self._log_cost(response, tier, time.monotonic() - t0)
             return content
 
-    def _log_cost(self, response: object, tier: str) -> None:
+    def _log_cost(self, response: object, tier: str, elapsed_s: float) -> None:
         """Log and accumulate LiteLLM-computed cost + token usage per call."""
         try:
             cost = getattr(response, "_hidden_params", {}).get("response_cost")
@@ -210,12 +268,19 @@ class LiteLLMVLM:
             )
             bucket = self._usage.setdefault(
                 tier,
-                {"calls": 0, "cost_usd": 0.0, "prompt_tokens": 0, "completion_tokens": 0},
+                {
+                    "calls": 0,
+                    "cost_usd": 0.0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "latency_s": 0.0,
+                },
             )
             bucket["calls"] += 1
             bucket["cost_usd"] += float(cost or 0.0)
             bucket["prompt_tokens"] += int(prompt_tokens or 0)
             bucket["completion_tokens"] += int(completion_tokens or 0)
+            bucket["latency_s"] += elapsed_s
         except Exception:  # never let metrics logging break a call
             logger.debug("[VLM-COST] tier=%s cost unavailable", tier)
 
@@ -268,6 +333,23 @@ class LiteLLMVLM:
             pass
 
         return [hypothesis_text]
+
+    async def assess_sufficiency(self, state: TicketState) -> SufficiencyResult:
+        """Judge diagnosis-readiness — uses VERIFY model (P4-5, INV-5).
+
+        Raises SufficiencyParseError on unparseable output or a generic
+        question; the RETRIEVE node fails open (proceeds to DIAGNOSE) —
+        a bad sufficiency call must never block a ticket.
+        """
+        evidence_text = gather_evidence_text([e.model_dump() for e in state.evidence])
+        prompt = _render(
+            _SUFFICIENCY_PROMPT,
+            description=state.description,
+            trade=state.trade or "unknown",
+            evidence=evidence_text,
+        )
+        raw = await self._call(self._verify, prompt, "verify/sufficiency")
+        return parse_sufficiency(raw)
 
     async def check_entailment(self, claim: str, evidence_text: str) -> bool:
         """Check if evidence entails claim — uses VERIFY model (cheaper)."""

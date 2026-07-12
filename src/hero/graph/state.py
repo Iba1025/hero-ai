@@ -28,6 +28,16 @@ Complexity = Literal["simple", "standard", "complex"]
 Urgency = Literal["emergency", "urgent", "routine"]
 
 
+class SufficiencyResult(BaseModel):
+    """Verify-tier sufficiency judgment (P4-5, INV-5): can evidence + ticket
+    plausibly support a diagnosis? If not, `question` carries ONE concrete,
+    tenant-answerable question. Parse gate in the adapter rejects generic
+    questions ("please provide more details") — never surfaced to a tenant."""
+
+    sufficient: bool
+    question: str | None = None
+
+
 class TriageResult(BaseModel):
     """VLM triage output (BL-4). Pydantic validation IS the parse gate —
     an out-of-vocabulary trade/urgency/complexity fails validation and the

@@ -217,6 +217,17 @@ class TicketState(BaseModel):
 - Checkpointer: `PostgresSaver` on `DATABASE_URL`. Every node runs under it (INV-6).
 - `CLARIFY` uses `interrupt()` — the graph pauses, `pending_question` is surfaced via API,
   human answer resumes the run at RETRIEVE. `clarify_rounds >= 3` → route to human dispatcher, not another loop.
+- **Sufficiency check** `[IMPL: src/hero/graph/nodes/retrieve.py]` (P4-5, INV-5): after evidence
+  assembly, the full-path RETRIEVE node makes a verify-tier `assess_sufficiency` call
+  (`prompts/sufficiency.md`) judging whether evidence + ticket plausibly support a diagnosis;
+  insufficient → sets `pending_question` (ONE concrete, tenant-answerable question) and the existing
+  RETRIEVE→CLARIFY conditional routes to the interrupt. Deterministic guardrails, checked BEFORE the
+  call: never on the fast path, never when a question is already pending, never at the clarify cap,
+  and never on hazards — `safety.gate.clarify_allowed` (pure, no LLM) blocks CLARIFY for
+  hard-escalate trades and hazard-keyword descriptions, which also skips the per-ticket sufficiency
+  tax. Fails open: parse failure or a generic question (`parse_sufficiency` rejects "please provide
+  more details"-style output, `SufficiencyParseError`) proceeds to DIAGNOSE — VERIFY + the safety
+  gate still gate the output, and a generic question never reaches a tenant.
 - **Single resume path rule** `[IMPL: src/hero/api/resume.py]` (P4-4 hardening): every resume of a
   CLARIFY-interrupted run MUST go through `hero.api.resume.resume_with_answer` — it snapshots the
   pending question *before* resuming (not recoverable from state history afterwards) and appends the
@@ -392,6 +403,7 @@ class VLM(Protocol):
     async def diagnose(self, state: TicketState) -> list[Hypothesis]: ...
     async def decompose_claims(self, hypothesis_text: str) -> list[str]: ...
     async def check_entailment(self, claim: str, evidence_text: str) -> bool: ...
+    async def assess_sufficiency(self, state: TicketState) -> SufficiencyResult: ...  # P4-5 (INV-5), verify tier — see §4 sufficiency check
 
 # catalog.py  (OPEN-1: schema behind interface because catalog source is undecided)
 class CatalogResolver(Protocol):
