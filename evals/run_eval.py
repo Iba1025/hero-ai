@@ -16,6 +16,11 @@ non-deterministic (DEC-20: newer Anthropic models reject the temperature
 param, so outputs cannot be pinned) — single-run numbers are samples,
 not point estimates.
 
+Sufficiency tax (P4-5d): cost FLAGs on any run (> ~$0.01/ticket).
+Latency is a TREND gate — it FLAGs only when the --runs N (N>1)
+across-runs average exceeds 2.5s/ticket; a single run over 2.5s prints
+a non-gating note (single-sample provider variance, per DEC-20 above).
+
 Adapter modes:
 - default (CI): stub adapters — no API keys, no model downloads, no Qdrant.
 - --live (local only): LiteLLMVLM (DEC-18 tiers) + ColModernVBERT embedder +
@@ -619,9 +624,21 @@ async def main() -> int:
             f"  n={n} tickets paid the check: avg calls={avg_calls:.1f} "
             f"avg cost=${avg_cost:.4f} avg latency={avg_lat:.2f}s"
         )
-        if avg_cost > 0.01 or avg_lat > 2.0:
+        # Cost flags on any run. Latency is a TREND gate: single-run numbers
+        # are samples, not point estimates (DEC-20 — provider-side variance on
+        # one ~1.5K-token call), so it flags only when the --runs N (N>1)
+        # across-runs average exceeds 2.5s.
+        if avg_cost > 0.01:
+            print("  FLAG: sufficiency cost exceeds ~$0.01 per ticket — review before shipping")
+        if args.runs > 1 and avg_lat > 2.5:
             print(
-                "  FLAG: sufficiency tax exceeds ~$0.01 or ~2s per ticket — review before shipping"
+                f"  FLAG: sufficiency latency trend over {args.runs} runs exceeds "
+                "2.5s per ticket — review before shipping"
+            )
+        elif args.runs == 1 and avg_lat > 2.5:
+            print(
+                "  note: single-run latency above 2.5s — not gating; "
+                "confirm the trend with --runs N"
             )
     else:
         reason = (
