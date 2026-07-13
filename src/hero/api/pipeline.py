@@ -27,7 +27,7 @@ async def run_and_persist(
     session: AsyncSession,
     ticket: Ticket,
     *,
-    media: list[dict[str, str]],
+    media: list[dict[str, str | None]],  # sha256 is best-effort → None allowed
     sensor_readings: list[dict[str, object]],
 ) -> str:
     """Run the graph for a freshly created ticket and persist everything.

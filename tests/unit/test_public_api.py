@@ -20,6 +20,7 @@ from hero.api.main import create_app
 from hero.api.ratelimit import limiter
 from hero.api.resume import NotAwaitingClarificationError
 from hero.api.routers import public as public_router
+from hero.graph.state import MediaRef
 
 BUILDING_ID = uuid.uuid4()
 ORG_ID = uuid.uuid4()
@@ -269,9 +270,15 @@ async def test_intake_happy_path_lands_in_building_org(
     assert created["tenant_contact"] == "555-0123"
     assert created["public_slug"] == out["status_slug"]
     assert intake_fakes["media"][0]["sha256"] is None
-    assert intake_fakes["runs"][0]["media"] == [
-        {"object_key": "public-intake/x/leak.jpg", "media_type": "image/jpeg"}
+    # Regression: the route once passed the raw MIME type ("image/jpeg") and
+    # dropped sha256 — every photo-carrying ticket 500'd when DIAGNOSE built
+    # TicketState. The dicts handed to the graph must validate as MediaRef.
+    run_media = intake_fakes["runs"][0]["media"]
+    assert run_media == [
+        {"object_key": "public-intake/x/leak.jpg", "media_type": "image", "sha256": None}
     ]
+    for m in run_media:
+        MediaRef(**m)  # must not raise
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,7 @@ class CreateTicketRequest(BaseModel):
     # org_id comes from the session token (P4-1) — never from the client.
     building_id: str
     description: str
-    media: list[dict[str, str]] = Field(default_factory=list)
+    media: list[dict[str, str | None]] = Field(default_factory=list)  # sha256 may be null
     sensor_readings: list[dict[str, object]] = Field(default_factory=list)
 
 

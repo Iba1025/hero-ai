@@ -47,6 +47,34 @@ async def test_simple_plumbing_ticket_completes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_photo_carrying_ticket_completes() -> None:
+    """Regression: media in the exact shape the public intake route produces
+    must survive TicketState validation in DIAGNOSE (it once 500'd on the
+    first photo ticket — MIME type instead of "image", sha256 missing)."""
+    graph = _build_stub_graph()
+    config = {"configurable": {"thread_id": "test-photo-001"}}
+
+    result = await graph.ainvoke(
+        {
+            "ticket_id": "T-PHOTO",
+            "description": "Leaking pipe under kitchen sink",
+            "media": [
+                {
+                    "object_key": "public-intake/b/u/photo.jpg",
+                    "media_type": "image",
+                    "sha256": None,  # best-effort — HTTP-LAN phones can't hash
+                }
+            ],
+        },
+        config=config,
+    )
+
+    assert result["verify_pass"] is True
+    assert result["escalated"] is False
+    assert result["work_order_id"] is not None
+
+
+@pytest.mark.asyncio
 async def test_gas_ticket_escalates() -> None:
     """A gas ticket must escalate regardless of everything else (INV-1)."""
     graph = _build_stub_graph()

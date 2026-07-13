@@ -53,7 +53,9 @@ class MediaRef(BaseModel):
 
     object_key: str
     media_type: Literal["image", "video"]
-    sha256: str
+    # Best-effort (P4-4): public intake can't hash on HTTP-LAN phones
+    # (no crypto.subtle) — nullable here and in the media table.
+    sha256: str | None = None
 
 
 class SensorReading(BaseModel):

@@ -222,7 +222,16 @@ async def public_intake(
         graph,
         session,
         ticket,
-        media=[{"object_key": p.object_key, "media_type": p.content_type} for p in request.photos],
+        # MediaRef wants the coarse kind ("image"), not the MIME type —
+        # content_type is validated image/* above. sha256 is best-effort.
+        media=[
+            {
+                "object_key": p.object_key,
+                "media_type": p.content_type.split("/")[0],
+                "sha256": p.sha256,
+            }
+            for p in request.photos
+        ],
         sensor_readings=[],
     )
     return PublicIntakeResponse(status_slug=status_slug, status_path=f"#/status/{status_slug}")
