@@ -222,6 +222,80 @@ class TicketEvent(Base):
     __table_args__ = (Index("ix_ticket_event_ticket_seq", "ticket_id", "seq"),)
 
 
+# Allowed conversation senders/kinds (Phase 5 STEP 3, DEC-23/24). Kept next to
+# the model so the DB CHECKs and the code vocabulary cannot drift silently.
+VALID_MESSAGE_SENDERS = ("tenant", "nova")
+VALID_MESSAGE_KINDS = (
+    "chat",  # ordinary conversational turn
+    "redirect",  # fixed guardrail copy (DEC-24 categories + injection)
+    "capped",  # fixed hand-off copy at the message cap
+    "escalation",  # fixed banner — hazard guardrail or pipeline SAFETY_GATE
+    "clarify_question",  # the pipeline's CLARIFY question, posted into chat
+    "clarify_answer",  # tenant message routed through the single resume path
+    "completion",  # fixed plain-language notice when the run finishes
+)
+
+
+class ConversationMessage(Base):
+    """Nova chat transcript (Phase 5 STEP 3, DEC-23) — one row per message.
+
+    Append-only, ordered by `seq` within a ticket (same single-writer rule as
+    ticket_event). Nova-side rows record which envelope path produced them
+    (kind + guardrail_reason) and the chat-tier cost. The ledger endpoint
+    joins these rows in directly — they are never duplicated into ticket_event.
+    """
+
+    __tablename__ = "conversation_message"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    ticket_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ticket.id"), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    sender: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="chat")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    # Which guardrail fired (e.g. "hazard_keyword:gas smell") — audit trail for
+    # the deterministic envelope (DEC-24). NULL for ordinary turns.
+    guardrail_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Chat-tier spend for model-generated rows; 0 for tenant/fixed-copy rows.
+    cost_usd: Mapped[float] = mapped_column(Double, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (
+        CheckConstraint("sender IN ('tenant', 'nova')", name="conversation_sender_allowed"),
+        CheckConstraint(
+            "kind IN ('chat', 'redirect', 'capped', 'escalation', "
+            "'clarify_question', 'clarify_answer', 'completion')",
+            name="conversation_kind_allowed",
+        ),
+        Index("ix_conversation_message_ticket_seq", "ticket_id", "seq"),
+    )
+
+
+class RateLimitEvent(Base):
+    """Postgres-backed rate-limit journal (Phase 5 STEP 3, BL-15).
+
+    One row per allowed public-endpoint event; hero.api.ratelimit counts rows
+    inside the sliding window. Replaces the in-memory per-process limiter —
+    counts survive restarts and are shared across workers.
+    """
+
+    __tablename__ = "rate_limit_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (Index("ix_rate_limit_event_key_created_at", "key", "created_at"),)
+
+
 # Allowed contractor verdicts (BL-0). Kept next to the model so the DB CHECK,
 # the API Literal, and this tuple cannot drift silently.
 VALID_VERDICTS = ("confirmed", "partially_correct", "wrong")

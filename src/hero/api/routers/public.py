@@ -15,23 +15,29 @@ from __future__ import annotations
 import re
 import secrets
 import uuid
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hero.api import background
-from hero.api.deps import get_db_session, get_graph, get_session_factory
+from hero.api.deps import get_chat_vlm, get_db_session, get_graph, get_session_factory
 from hero.api.pipeline import resume_ticket_pipeline, run_ticket_pipeline
-from hero.api.ratelimit import limiter
+from hero.api.ratelimit import allow as rate_allow
 from hero.config import get_settings
+from hero.nova.bridge import handle_tenant_message, record_opening
+from hero.nova.guardrails import check_message
 from hero.storage.media import presigned_upload_url
-from hero.storage.models import Building, Ticket
+from hero.storage.models import Building, ConversationMessage, Ticket
 from hero.storage.repo import (
     create_media,
     create_ticket,
     get_building_by_slug,
     get_ticket_by_public_slug,
+    has_conversation,
+    list_conversation_messages,
     list_ticket_events,
     update_pipeline_status,
 )
@@ -98,6 +104,48 @@ class PublicAnswerRequest(BaseModel):
     answer: str
 
 
+# ── Nova chat (Phase 5 STEP 3, DEC-23/24) ───────────────────────────────────
+
+
+class PublicChatMessage(BaseModel):
+    """One transcript entry. `kind` is chat-envelope vocabulary (render hint:
+    escalation/redirect banners vs ordinary bubbles) — never pipeline
+    vocabulary, and no guardrail internals cross the boundary."""
+
+    sender: str
+    kind: str
+    body: str
+    created_at: str
+
+
+class PublicChatStartRequest(BaseModel):
+    message: str
+    contact: str
+    photos: list[PublicPhoto] = Field(default_factory=list)
+
+
+class PublicChatStartResponse(BaseModel):
+    # None when the opener was redirected (DEC-24): nothing was created.
+    status_slug: str | None
+    status_path: str | None
+    reply: PublicChatMessage
+
+
+class PublicChatMessageRequest(BaseModel):
+    message: str
+
+
+class PublicChatReplyResponse(BaseModel):
+    reply: PublicChatMessage
+    working: bool
+
+
+class PublicConversationResponse(BaseModel):
+    state: str
+    working: bool
+    messages: list[PublicChatMessage]
+
+
 async def _require_building(session: AsyncSession, slug: str) -> Building:
     building = await get_building_by_slug(session, slug)
     if building is None:
@@ -112,8 +160,10 @@ async def _require_public_ticket(session: AsyncSession, status_slug: str) -> Tic
     return ticket
 
 
-def _rate_gate(key: str, *, max_events: int) -> None:
-    if not limiter.allow(key, max_events=max_events):
+async def _rate_gate(session: AsyncSession, key: str, *, max_events: int) -> None:
+    """Postgres-backed sliding window (Phase 5 STEP 3, BL-15) — commits the
+    event immediately, so it must run before any other write in the handler."""
+    if not await rate_allow(session, key, max_events=max_events):
         raise HTTPException(status_code=429, detail="Too many requests — try again later")
 
 
@@ -167,7 +217,7 @@ async def public_presign(
     """
     building = await _require_building(session, slug)
     settings = get_settings()
-    _rate_gate(f"presign:{slug}", max_events=settings.public_presign_rate_per_hour)
+    await _rate_gate(session, f"presign:{slug}", max_events=settings.public_presign_rate_per_hour)
 
     if not request.content_type.startswith("image/"):
         raise HTTPException(status_code=415, detail="Only image uploads are accepted")
@@ -183,6 +233,78 @@ async def public_presign(
     return PublicPresignResponse(upload_url=url, object_key=object_key)
 
 
+def _validate_intake(
+    description: str, contact: str, photos: list[PublicPhoto], settings: Any
+) -> tuple[str, str]:
+    """Shared form/chat intake validation. Returns (description, contact) stripped."""
+    description = description.strip()
+    contact = contact.strip()
+    if not description or len(description) > _MAX_DESCRIPTION_CHARS:
+        raise HTTPException(status_code=422, detail="Please describe the problem")
+    if not contact or len(contact) > _MAX_CONTACT_CHARS:
+        raise HTTPException(status_code=422, detail="A phone number or email is required")
+    if len(photos) > settings.public_max_photos:
+        raise HTTPException(status_code=422, detail=f"At most {settings.public_max_photos} photos")
+    for photo in photos:
+        if not photo.content_type.startswith("image/"):
+            raise HTTPException(status_code=415, detail="Only image uploads are accepted")
+        if not photo.object_key.startswith("public-intake/"):
+            raise HTTPException(status_code=422, detail="Unrecognized photo reference")
+    return description, contact
+
+
+async def _create_public_ticket(
+    session: AsyncSession,
+    building: Building,
+    *,
+    description: str,
+    contact: str,
+    photos: list[PublicPhoto],
+) -> tuple[uuid.UUID, str]:
+    """Ticket + media rows for a public intake (form or chat). Does not commit."""
+    status_slug = secrets.token_urlsafe(16)
+    ticket = await create_ticket(
+        session,
+        org_id=building.org_id,
+        building_id=building.id,
+        description=description,
+        tenant_contact=contact,
+        public_slug=status_slug,
+    )
+    for photo in photos:
+        await create_media(
+            session,
+            ticket_id=ticket.id,
+            object_key=photo.object_key,
+            media_type=photo.content_type,
+            sha256=photo.sha256,
+        )
+    return ticket.id, status_slug  # capture id before commit — no lazy refresh later
+
+
+async def _spawn_pipeline(ticket_id: uuid.UUID, photos: list[PublicPhoto]) -> None:
+    """BL-17 (H1): respond immediately; the graph runs in a background task."""
+    graph = await get_graph()
+    background.spawn(
+        run_ticket_pipeline(
+            graph,
+            ticket_id,
+            # MediaRef wants the coarse kind ("image"), not the MIME type —
+            # content_type is validated image/* upstream. sha256 is best-effort.
+            media=[
+                {
+                    "object_key": p.object_key,
+                    "media_type": p.content_type.split("/")[0],
+                    "sha256": p.sha256,
+                }
+                for p in photos
+            ],
+            sensor_readings=[],
+            session_factory=get_session_factory(),
+        )
+    )
+
+
 @router.post("/buildings/{slug}/tickets", response_model=PublicIntakeResponse)
 async def public_intake(
     slug: str,
@@ -193,63 +315,16 @@ async def public_intake(
     same pipeline as an operator-created ticket (hero.api.pipeline)."""
     building = await _require_building(session, slug)
     settings = get_settings()
-    _rate_gate(f"intake:{slug}", max_events=settings.public_intake_rate_per_hour)
+    await _rate_gate(session, f"intake:{slug}", max_events=settings.public_intake_rate_per_hour)
 
-    description = request.description.strip()
-    contact = request.contact.strip()
-    if not description or len(description) > _MAX_DESCRIPTION_CHARS:
-        raise HTTPException(status_code=422, detail="Please describe the problem")
-    if not contact or len(contact) > _MAX_CONTACT_CHARS:
-        raise HTTPException(status_code=422, detail="A phone number or email is required")
-    if len(request.photos) > settings.public_max_photos:
-        raise HTTPException(status_code=422, detail=f"At most {settings.public_max_photos} photos")
-    for photo in request.photos:
-        if not photo.content_type.startswith("image/"):
-            raise HTTPException(status_code=415, detail="Only image uploads are accepted")
-        if not photo.object_key.startswith("public-intake/"):
-            raise HTTPException(status_code=422, detail="Unrecognized photo reference")
-
-    status_slug = secrets.token_urlsafe(16)
-    ticket = await create_ticket(
-        session,
-        org_id=building.org_id,
-        building_id=building.id,
-        description=description,
-        tenant_contact=contact,
-        public_slug=status_slug,
+    description, contact = _validate_intake(
+        request.description, request.contact, request.photos, settings
     )
-    for photo in request.photos:
-        await create_media(
-            session,
-            ticket_id=ticket.id,
-            object_key=photo.object_key,
-            media_type=photo.content_type,
-            sha256=photo.sha256,
-        )
-
-    ticket_id = ticket.id  # capture before commit — no lazy refresh later
+    ticket_id, status_slug = await _create_public_ticket(
+        session, building, description=description, contact=contact, photos=request.photos
+    )
     await session.commit()
-
-    # BL-17 (H1): respond immediately; the graph runs in a background task.
-    graph = await get_graph()
-    background.spawn(
-        run_ticket_pipeline(
-            graph,
-            ticket_id,
-            # MediaRef wants the coarse kind ("image"), not the MIME type —
-            # content_type is validated image/* above. sha256 is best-effort.
-            media=[
-                {
-                    "object_key": p.object_key,
-                    "media_type": p.content_type.split("/")[0],
-                    "sha256": p.sha256,
-                }
-                for p in request.photos
-            ],
-            sensor_readings=[],
-            session_factory=get_session_factory(),
-        )
-    )
+    await _spawn_pipeline(ticket_id, request.photos)
     return PublicIntakeResponse(status_slug=status_slug, status_path=f"#/status/{status_slug}")
 
 
@@ -275,7 +350,9 @@ async def public_answer(
     path (hero.api.resume, spec §4), same as the operator endpoint."""
     ticket = await _require_public_ticket(session, status_slug)
     settings = get_settings()
-    _rate_gate(f"answer:{status_slug}", max_events=settings.public_answer_rate_per_hour)
+    await _rate_gate(
+        session, f"answer:{status_slug}", max_events=settings.public_answer_rate_per_hour
+    )
 
     answer = request.answer.strip()
     if not answer or len(answer) > _MAX_DESCRIPTION_CHARS:
@@ -298,3 +375,126 @@ async def public_answer(
         )
     )
     return _status_response(ticket, None, working=True)
+
+
+# ── Nova chat endpoints (Phase 5 STEP 3, DEC-23/24) ─────────────────────────
+
+
+def _chat_message(m: ConversationMessage) -> PublicChatMessage:
+    return PublicChatMessage(
+        sender=m.sender, kind=m.kind, body=m.body, created_at=m.created_at.isoformat()
+    )
+
+
+@router.post("/buildings/{slug}/conversations", response_model=PublicChatStartResponse)
+async def public_chat_start(
+    slug: str,
+    request: PublicChatStartRequest,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> PublicChatStartResponse:
+    """Tenant opens a Nova conversation. The first allowed message IS the
+    intake: same ticket, same org, same full pipeline as the form (DEC-23 —
+    depth unchanged; Nova acknowledges with fixed copy while the run works).
+
+    Guardrails run before anything is created: a redirected opener (legal/
+    medical/safety/injection — DEC-24) gets fixed copy and creates NOTHING;
+    a hazard opener creates the ticket, stamps it escalated immediately, and
+    still runs the pipeline so the ledger records the run honestly.
+    """
+    building = await _require_building(session, slug)
+    settings = get_settings()
+    await _rate_gate(session, f"intake:{slug}", max_events=settings.public_intake_rate_per_hour)
+
+    message, contact = _validate_intake(request.message, request.contact, request.photos, settings)
+
+    decision = check_message(message)
+    if decision.action == "redirect":
+        # Not a maintenance report — fixed copy, no ticket, no model, no rows.
+        return PublicChatStartResponse(
+            status_slug=None,
+            status_path=None,
+            reply=PublicChatMessage(
+                sender="nova",
+                kind="redirect",
+                body=decision.reply or "",
+                created_at=datetime.now(UTC).isoformat(),
+            ),
+        )
+
+    ticket_id, status_slug = await _create_public_ticket(
+        session, building, description=message, contact=contact, photos=request.photos
+    )
+    reply = await record_opening(session, ticket_id=ticket_id, message=message, decision=decision)
+    reply_out = _chat_message(reply)
+    await session.commit()
+    await _spawn_pipeline(ticket_id, request.photos)
+    return PublicChatStartResponse(
+        status_slug=status_slug, status_path=f"#/status/{status_slug}", reply=reply_out
+    )
+
+
+@router.get("/status/{status_slug}/messages", response_model=PublicConversationResponse)
+async def public_conversation(
+    status_slug: str,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> PublicConversationResponse:
+    """The full transcript for exactly the ticket this slug names — the chat
+    UI reloads and polls this (async diagnosis arrives as a message)."""
+    ticket = await _require_public_ticket(session, status_slug)
+    messages = await list_conversation_messages(session, ticket.id)
+    working = ticket.pipeline_status in ("queued", "running")
+    state = "working on it" if working else _PLAIN_STATUS.get(ticket.status, "looking into it")
+    return PublicConversationResponse(
+        state=state, working=working, messages=[_chat_message(m) for m in messages]
+    )
+
+
+@router.post("/status/{status_slug}/messages", response_model=PublicChatReplyResponse)
+async def public_chat_message(
+    status_slug: str,
+    request: PublicChatMessageRequest,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> PublicChatReplyResponse:
+    """One tenant chat message, routed by the bridge (hero.nova.bridge):
+    guardrails first, then — when the run is parked at CLARIFY — the message
+    is the clarify answer, resumed through the single resume path exactly
+    like POST /answer. Everything else gets a conversational reply."""
+    ticket = await _require_public_ticket(session, status_slug)
+    settings = get_settings()
+    await _rate_gate(
+        session, f"chat:{status_slug}", max_events=settings.public_message_rate_per_hour
+    )
+
+    message = request.message.strip()
+    if not message or len(message) > _MAX_DESCRIPTION_CHARS:
+        raise HTTPException(status_code=422, detail="Please write a message")
+    if not await has_conversation(session, ticket.id):
+        # Form-intake tickets keep the status page + POST /answer flow.
+        raise HTTPException(status_code=400, detail="This ticket has no conversation")
+
+    question = await _pending_question(session, ticket)
+    turn = await handle_tenant_message(
+        get_chat_vlm(),
+        session,
+        ticket=ticket,
+        message=message,
+        pending_question=question,
+        settings=settings,
+    )
+    reply_out = _chat_message(turn.nova)
+
+    if turn.resume_answer is not None:
+        ticket_id = ticket.id
+        await update_pipeline_status(session, ticket_id, "running")
+        await session.commit()
+        graph = await get_graph()
+        background.spawn(
+            resume_ticket_pipeline(
+                graph, ticket_id, answer=turn.resume_answer, session_factory=get_session_factory()
+            )
+        )
+        return PublicChatReplyResponse(reply=reply_out, working=True)
+
+    await session.commit()
+    working = ticket.pipeline_status in ("queued", "running")
+    return PublicChatReplyResponse(reply=reply_out, working=working)

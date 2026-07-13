@@ -178,6 +178,28 @@ VERIFY → SAFETY_GATE) keeps its depth (DEC-23). `evals/run_nova_eval.py` gates
 in CI on the deterministic stub tier; `--live` replays the same cases on the real chat model
 and prints verbatim transcripts.
 
+**Nova ↔ pipeline bridge (Phase 5 STEP 3, DEC-23/24)** `[IMPL: src/hero/nova/bridge.py, src/hero/api/routers/public.py, src/hero/storage/repo.py, alembic/versions/0008_nova_conversation.py]`:
+chat-first intake reuses the form machinery 1:1 — the first ALLOWED chat message creates the
+ticket AND spawns the full pipeline immediately (`POST /public/buildings/{slug}/conversations`);
+Nova's opening reply is fixed copy, the pipeline's CLARIFY is the one questioner. Redirected
+openers create NOTHING (ephemeral fixed copy, no rows); hazard openers create the ticket,
+stamp it `escalated` immediately, and still run the pipeline (honest ledger). Conversation
+state is the `conversation_message` table (sender/kind/body/guardrail_reason/cost_usd, seq per
+ticket — same single-writer rule as `ticket_event`); the operator ledger joins these rows in
+as `conversation` entries (stable timestamp sort interleaves chat with pipeline events). Every
+mid-conversation message (`POST /public/status/{slug}/messages`) routes deterministically:
+guardrails FIRST (a hazard sent as a clarify answer escalates — it is never fed to the resume
+path; escalation is sticky: `persist_completion` never downgrades an escalated ticket), then —
+when the run is parked (`awaiting_tenant` + pending question) — the message IS the clarify
+answer, resumed through the single resume path (`hero.api.resume`, extended never bypassed),
+else the conversational tier. Pipeline → chat: `persist_completion` calls `post_run_update` —
+the CLARIFY question, completion notice, or escalation banner (deduped) posts into
+chat-originated conversations as fixed copy; no diagnosis substance crosses the public
+boundary. Honest gap (pilot): messages sent mid-run get a conversational reply but do not
+feed the pipeline. Public rate limiting is Postgres-backed (`rate_limit_event`,
+`hero.api.ratelimit.allow` — BL-15(2)): DB-clock sliding window, opportunistic prune, commits
+immediately; count-then-insert race = pilot-acceptable overshoot.
+
 ---
 
 ## 4. Graph State `[IMPL: src/hero/graph/state.py]` (DEC-17: TicketState Pydantic + GraphState TypedDict)

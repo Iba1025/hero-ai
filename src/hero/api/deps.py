@@ -201,6 +201,26 @@ class _ResumeGuardedGraph:
         return await self._graph.ainvoke(run_input, *args, **kwargs)
 
 
+_CHAT_VLM_SINGLETON: Any = None
+
+
+def get_chat_vlm() -> Any:
+    """Nova's conversational-tier VLM (Phase 5, DEC-23) — same settings-selected
+    adapter family as the graph's (make_vlm), built once at startup (lifespan
+    warms it; lazy build covers unit-test ASGI transports). Only hero.nova
+    ever calls its `.chat` tier."""
+    global _CHAT_VLM_SINGLETON
+    if _CHAT_VLM_SINGLETON is None:
+        _CHAT_VLM_SINGLETON = make_vlm(get_settings())
+    return _CHAT_VLM_SINGLETON
+
+
+def reset_chat_vlm() -> None:
+    """Test hook: drop the singleton so the next build sees fresh settings."""
+    global _CHAT_VLM_SINGLETON
+    _CHAT_VLM_SINGLETON = None
+
+
 _GRAPH_SINGLETON: Any = None
 
 

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from hero.api import background
-from hero.api.deps import get_session_factory, init_graph
+from hero.api.deps import get_chat_vlm, get_session_factory, init_graph
 from hero.api.pipeline import recover_orphaned_runs
 from hero.api.routers import auth, outcomes, public, tickets, uploads
 from hero.config import get_settings, region_guard
@@ -30,6 +30,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # first-ticket self-deadlock), and live model weights load here, never on a
     # user request.
     graph = await init_graph()
+    # Nova chat tier (Phase 5, DEC-23): build at startup, never on a request.
+    get_chat_vlm()
     # BL-17 (H1): re-drive runs a dead process left queued/running — the
     # Postgres checkpointer (INV-6) resumes them from the last completed node.
     # Deliberately BLOCKING at pilot scale: the server does not accept requests

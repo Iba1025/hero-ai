@@ -119,6 +119,13 @@ class Settings(BaseSettings):
     public_answer_rate_per_hour: int = Field(
         default=20, description="Clarify answers per ticket status link per hour"
     )
+    public_message_rate_per_hour: int = Field(
+        default=60,
+        description=(
+            "Nova chat messages per ticket status link per hour (Phase 5 STEP 3) — "
+            "the per-conversation nova_max_messages cap bounds total spend"
+        ),
+    )
     public_max_photos: int = Field(default=6, description="Max photos per public ticket")
     public_max_photo_bytes: int = Field(
         default=10 * 1024 * 1024, description="Max declared photo size for a public presign"

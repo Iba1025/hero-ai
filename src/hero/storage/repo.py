@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from hero.storage.models import (
     Building,
     ContractorStatement,
+    ConversationMessage,
     Diagnosis,
     DiagnosisClaim,
     Media,
@@ -360,6 +361,57 @@ async def list_ticket_events(session: AsyncSession, ticket_id: uuid.UUID) -> lis
         select(TicketEvent).where(TicketEvent.ticket_id == ticket_id).order_by(TicketEvent.seq)
     )
     return list(result.scalars().all())
+
+
+async def append_conversation_message(
+    session: AsyncSession,
+    *,
+    ticket_id: uuid.UUID,
+    sender: str,
+    body: str,
+    kind: str = "chat",
+    guardrail_reason: str | None = None,
+    cost_usd: float = 0.0,
+) -> ConversationMessage:
+    """Append one Nova chat message (Phase 5 STEP 3). seq continues from the
+    ticket's max — same single-writer-per-ticket rule as append_ticket_events."""
+    result = await session.execute(
+        select(func.coalesce(func.max(ConversationMessage.seq), 0)).where(
+            ConversationMessage.ticket_id == ticket_id
+        )
+    )
+    message = ConversationMessage(
+        ticket_id=ticket_id,
+        seq=int(result.scalar_one()) + 1,
+        sender=sender,
+        kind=kind,
+        body=body,
+        guardrail_reason=guardrail_reason,
+        cost_usd=cost_usd,
+    )
+    session.add(message)
+    await session.flush()
+    return message
+
+
+async def list_conversation_messages(
+    session: AsyncSession, ticket_id: uuid.UUID
+) -> list[ConversationMessage]:
+    result = await session.execute(
+        select(ConversationMessage)
+        .where(ConversationMessage.ticket_id == ticket_id)
+        .order_by(ConversationMessage.seq)
+    )
+    return list(result.scalars().all())
+
+
+async def has_conversation(session: AsyncSession, ticket_id: uuid.UUID) -> bool:
+    """True for chat-originated tickets — the pipeline posts run updates into
+    the conversation only when one exists (form/operator tickets have none)."""
+    result = await session.execute(
+        select(ConversationMessage.id).where(ConversationMessage.ticket_id == ticket_id).limit(1)
+    )
+    return result.scalar() is not None
 
 
 async def get_diagnoses_with_claims(

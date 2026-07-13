@@ -12,7 +12,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from hero.storage.models import ContractorStatement, Diagnosis, DiagnosisClaim, Ticket, TicketEvent
+from hero.storage.models import (
+    ContractorStatement,
+    ConversationMessage,
+    Diagnosis,
+    DiagnosisClaim,
+    Ticket,
+    TicketEvent,
+)
 
 Event = tuple[str, dict[str, Any]]
 
@@ -129,8 +136,15 @@ def assemble_ledger(
     events: list[TicketEvent],
     diagnoses_with_claims: list[tuple[Diagnosis, list[DiagnosisClaim]]],
     statements: list[ContractorStatement],
+    conversation: list[ConversationMessage] | None = None,
 ) -> list[dict[str, Any]]:
     """Chronological ledger entries, all from persisted rows.
+
+    Nova conversation rows (Phase 5 STEP 3) are joined in as `conversation`
+    entries — canonical in conversation_message, never duplicated into
+    ticket_event (same rule as diagnosis_claim). Entries are stable-sorted by
+    timestamp at the end so chat and pipeline events interleave truthfully;
+    equal timestamps (rows from one transaction) keep construction order.
 
     Per-claim substance is canonical in diagnosis_claim (DEC-6) and joined
     onto verify entries positionally: the nth verify event corresponds to the
@@ -209,4 +223,20 @@ def assemble_ledger(
             }
         )
 
+    for m in conversation or []:
+        entries.append(
+            {
+                "state": "conversation",
+                "ts": m.created_at.isoformat(),
+                "run_id": None,
+                "data": {
+                    "sender": m.sender,
+                    "kind": m.kind,
+                    "body": m.body,
+                    "guardrail_reason": m.guardrail_reason,
+                },
+            }
+        )
+
+    entries.sort(key=lambda e: str(e["ts"]))  # stable — see docstring
     return entries

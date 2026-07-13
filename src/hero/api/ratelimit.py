@@ -1,36 +1,56 @@
-"""In-process sliding-window rate limiter — P4-4d abuse basics.
+"""Postgres-backed sliding-window rate limiter — P4-4d abuse basics, grown up
+(Phase 5 STEP 3, BL-15).
 
-Honest limitations, deliberate at pilot scale: in-memory and per-process, so
-counts reset on restart and are not shared across workers. A single uvicorn
-serves the pilot; revisit alongside real deployment infra, not before.
+Replaces the in-memory per-process SlidingWindowLimiter: counts now survive
+restarts and are shared across workers (the FRICTION.md Phase 5 item). One
+rate_limit_event row per allowed event; `allow` counts rows inside the window
+on the caller's session, using the DB clock (func.now()) on both sides so app
+and DB clocks never mix.
+
+`allow` COMMITS immediately: a request that later fails validation (and rolls
+back its session) must still have consumed budget — otherwise rejected
+requests would be free retries. Rate gates therefore run before any other
+write in a handler.
+
+Honest limitation, deliberate at pilot scale: count-then-insert is not
+serialized, so N concurrent requests can each see the window as open and all
+pass — overshoot is bounded by in-flight concurrency. Fine for an abuse
+basic; a per-key advisory lock would close it if ever needed.
 """
 
 from __future__ import annotations
 
-import time
-from collections import deque
+from datetime import timedelta
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from hero.storage.models import RateLimitEvent
 
 
-class SlidingWindowLimiter:
-    """allow(key) is True until `max_events` land within `window_seconds`."""
+async def allow(
+    session: AsyncSession, key: str, *, max_events: int, window_seconds: float = 3600.0
+) -> bool:
+    """True (and one event recorded) until `max_events` land within the window."""
+    cutoff = func.now() - timedelta(seconds=window_seconds)
 
-    def __init__(self) -> None:
-        self._events: dict[str, deque[float]] = {}
+    # Opportunistic prune keeps the journal small — expired rows for this key
+    # are dead weight for every future count.
+    await session.execute(
+        delete(RateLimitEvent).where(RateLimitEvent.key == key, RateLimitEvent.created_at < cutoff)
+    )
+    count = (
+        await session.execute(
+            select(func.count())
+            .select_from(RateLimitEvent)
+            .where(RateLimitEvent.key == key, RateLimitEvent.created_at >= cutoff)
+        )
+    ).scalar_one()
 
-    def allow(self, key: str, *, max_events: int, window_seconds: float = 3600.0) -> bool:
-        now = time.monotonic()
-        window = self._events.setdefault(key, deque())
-        while window and now - window[0] > window_seconds:
-            window.popleft()
-        if len(window) >= max_events:
-            return False
-        window.append(now)
-        return True
+    if int(count) >= max_events:
+        await session.commit()  # persist the prune; nothing else is pending
+        return False
 
-    def reset(self) -> None:
-        """Test hook — clears all windows."""
-        self._events.clear()
-
-
-# Module singleton shared by the public router (single process at pilot scale).
-limiter = SlidingWindowLimiter()
+    session.add(RateLimitEvent(key=key))
+    await session.commit()
+    return True

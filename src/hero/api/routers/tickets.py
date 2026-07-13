@@ -28,6 +28,7 @@ from hero.storage.repo import (
     get_diagnoses_with_claims,
     get_statements_for_ticket,
     get_ticket_for_org,
+    list_conversation_messages,
     list_ticket_events,
     list_tickets_for_org,
     update_pipeline_status,
@@ -247,6 +248,7 @@ async def get_ticket_ledger(
         await list_ticket_events(session, ticket_uuid),
         await get_diagnoses_with_claims(session, ticket_uuid),
         await get_statements_for_ticket(session, ticket_uuid),
+        conversation=await list_conversation_messages(session, ticket_uuid),
     )
     return LedgerResponse(
         ticket_id=str(ticket.id),

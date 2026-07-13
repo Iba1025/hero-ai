@@ -1,13 +1,12 @@
-"""P4-4 round-trip, real Postgres + real stub graph, end to end through ASGI:
+"""Phase 5 STEP 3 round-trip, real Postgres + real stub graph, through ASGI:
 
-public intake → CLARIFY pending → public answer (single resume path) →
-resumed to completion → the assembled ledger shows the full round.
+chat opener → ticket + pipeline → CLARIFY parks → the question posts INTO the
+chat → the tenant's next chat message IS the answer (single resume path) →
+completion notice posts into the chat → ledger interleaves the conversation.
 
-The stub pipeline never asks a clarify question organically, so the graph is
-wrapped to inject `pending_question` into the create-run input — exactly how
-tests/invariants/test_inv6_checkpoints.py triggers the interrupt. The wrapper
-sits INSIDE the real `_ResumeGuardedGraph`, so the resume also exercises the
-single-resume-path guard with a genuine Command(resume=...).
+Same clarify-injection trick as test_public_roundtrip.py. The chat VLM is an
+exploding stand-in: this entire flow is fixed copy + the pipeline — the
+conversational model tier must never be touched.
 """
 
 from __future__ import annotations
@@ -30,29 +29,26 @@ from hero.api import background, deps
 from hero.api.main import create_app
 from hero.api.routers import public as public_router
 from hero.graph.build import build_graph
+from hero.nova.bridge import COMPLETION_NOTICE, INTAKE_ACK, RESUME_ACK
 from hero.storage.ledger import assemble_ledger
 from hero.storage.repo import (
     create_building,
     get_diagnoses_with_claims,
     get_statements_for_ticket,
     get_ticket_by_public_slug,
+    list_conversation_messages,
     list_ticket_events,
 )
 from tests.invariants.conftest import requires_docker
 
 pytestmark = [requires_docker, pytest.mark.asyncio]
 
-# Deliberately benign: "water"/"leak" wording triages to water_intrusion, a
-# hard escalation category (INV-1) — that path ends the run at the safety gate.
 QUESTION = "Which room is the radiator in?"
 ANSWER = "The living room"
-BUILDING_SLUG = "roundtrip-building-slug"
+BUILDING_SLUG = "chat-roundtrip-building"
 
 
 class _InjectClarify:
-    """First (dict) invocation gets pending_question injected; Command resumes
-    and everything else pass straight through to the compiled graph."""
-
     def __init__(self, inner: Any) -> None:
         self._inner = inner
 
@@ -65,15 +61,15 @@ class _InjectClarify:
         return await self._inner.ainvoke(run_input, *args, **kwargs)
 
 
+class _ExplodingChatVLM:
+    def __getattr__(self, name: str) -> Any:
+        raise AssertionError("chat VLM must never be touched in this roundtrip")
+
+
 @pytest.fixture
 async def client(
     db_session: AsyncSession, postgres_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
-    # Rate limiting is Postgres-backed now (BL-15) — the per-test schema starts
-    # empty, so no reset is needed.
-
-    # ONE shared graph instance across requests: the resume request must see
-    # the checkpoint the create request wrote (MemorySaver is per-instance).
     compiled = build_graph(
         embedder=StubEmbedder(),
         reranker=StubReranker(),
@@ -88,9 +84,8 @@ async def client(
         return shared
 
     monkeypatch.setattr(public_router, "get_graph", fake_get_graph)
+    monkeypatch.setattr(public_router, "get_chat_vlm", lambda: _ExplodingChatVLM())
 
-    # BL-17 (H1): the background run opens its OWN sessions — bind its factory
-    # to the same test Postgres (settings.database_url may point elsewhere).
     engine = create_async_engine(postgres_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(public_router, "get_session_factory", lambda: factory)
@@ -104,75 +99,86 @@ async def client(
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
-    await background.drain()  # never leave a run writing into a dropped schema
+    await background.drain()
     await engine.dispose()
 
 
-async def test_public_intake_clarify_answer_roundtrip(
+async def test_chat_intake_clarify_answer_roundtrip(
     client: httpx.AsyncClient, db_session: AsyncSession
 ) -> None:
     await create_building(db_session, org_id=uuid.uuid4(), name="Maple Court", slug=BUILDING_SLUG)
+    await db_session.commit()
 
-    # 1. Tenant files the problem → accepted immediately (BL-17/H1); the run
-    #    happens in a background task and interrupts at CLARIFY.
+    # 1. Opening message creates the ticket + spawns the FULL pipeline
+    #    (DEC-23: depth unchanged); Nova acknowledges with fixed copy.
     resp = await client.post(
-        f"/public/buildings/{BUILDING_SLUG}/tickets",
+        f"/public/buildings/{BUILDING_SLUG}/conversations",
         json={
-            "description": "The radiator is cold and makes a banging noise",
+            "message": "The radiator is cold and makes a banging noise",
             "contact": "555-0123",
-            "photos": [],
         },
     )
     assert resp.status_code == 200
-    status_slug = resp.json()["status_slug"]
-
-    await background.drain()  # let the create-run park at CLARIFY
-    db_session.expire_all()  # the run committed on its own sessions
-
-    # 2. Status page shows the pending question in plain language.
-    resp = await client.get(f"/public/status/{status_slug}")
-    assert resp.status_code == 200
     body = resp.json()
-    assert body["state"] == "question for you"
-    assert body["question"] == QUESTION
-    assert body["working"] is False
-    assert set(body) == {"state", "question", "description", "created_at", "working"}
+    status_slug = body["status_slug"]
+    assert status_slug
+    assert body["reply"]["body"] == INTAKE_ACK
 
-    # 3. Tenant answers → accepted immediately; the resume runs in the
-    #    background through the single resume path → completes.
-    resp = await client.post(f"/public/status/{status_slug}/answer", json={"answer": ANSWER})
-    assert resp.status_code == 200
-    assert resp.json()["state"] == "working on it"
-    assert resp.json()["working"] is True
-    assert resp.json()["question"] is None
-
-    await background.drain()  # let the resume finish
+    await background.drain()  # run parks at CLARIFY
     db_session.expire_all()
 
-    # 4. The ledger shows the full round — no integrity error, no missing question.
+    # 2. The pipeline's question arrived IN the chat (post_run_update).
+    resp = await client.get(f"/public/status/{status_slug}/messages")
+    assert resp.status_code == 200
+    convo = resp.json()
+    assert convo["state"] == "question for you"
+    assert convo["working"] is False
+    kinds = [(m["sender"], m["kind"]) for m in convo["messages"]]
+    assert kinds == [("tenant", "chat"), ("nova", "chat"), ("nova", "clarify_question")]
+    assert convo["messages"][-1]["body"] == QUESTION
+
+    # 3. The tenant's next message IS the clarify answer — resumed through the
+    #    single resume path, exactly like POST /answer.
+    resp = await client.post(f"/public/status/{status_slug}/messages", json={"message": ANSWER})
+    assert resp.status_code == 200
+    assert resp.json()["reply"]["body"] == RESUME_ACK
+    assert resp.json()["working"] is True
+
+    await background.drain()  # resume completes
+    db_session.expire_all()
+
+    # 4. Completion posted into the chat; ticket landed like a form ticket.
     ticket = await get_ticket_by_public_slug(db_session, status_slug)
     assert ticket is not None
     assert ticket.status == "diagnosed"
-    assert ticket.pipeline_status == "complete"  # BL-17: the stamp landed
-    assert ticket.tenant_contact == "555-0123"
+    assert ticket.pipeline_status == "complete"
 
+    messages = await list_conversation_messages(db_session, ticket.id)
+    assert [(m.sender, m.kind) for m in messages] == [
+        ("tenant", "chat"),
+        ("nova", "chat"),
+        ("nova", "clarify_question"),
+        ("tenant", "clarify_answer"),
+        ("nova", "chat"),
+        ("nova", "completion"),
+    ]
+    assert messages[-1].body == COMPLETION_NOTICE
+
+    # 5. The operator ledger interleaves chat with pipeline events truthfully.
     entries = assemble_ledger(
         ticket,
         await list_ticket_events(db_session, ticket.id),
         await get_diagnoses_with_claims(db_session, ticket.id),
         await get_statements_for_ticket(db_session, ticket.id),
+        conversation=messages,
     )
     states = [e["state"] for e in entries]
     assert "integrity_error" not in states
-    assert states[:4] == ["intake", "triage", "retrieve", "clarify_pending"]
-    assert {"clarify_answered", "diagnose", "verify", "safety_gate"} <= set(states)
-    assert states.index("clarify_pending") < states.index("clarify_answered")
-
+    assert states[0] == "intake"
+    assert states.count("conversation") == len(messages)
+    assert {"triage", "retrieve", "clarify_pending", "clarify_answered", "verify"} <= set(states)
+    # The clarify question was the run's question, verbatim, in the chat.
     pending = next(e for e in entries if e["state"] == "clarify_pending")
     assert pending["data"]["question"] == QUESTION
     answered = next(e for e in entries if e["state"] == "clarify_answered")
-    assert answered["data"] == {"question": QUESTION, "answer": ANSWER, "round": 1}
-
-    # The claim join held (one verify event, one diagnosis row).
-    verify = next(e for e in entries if e["state"] == "verify")
-    assert "fault" in verify["data"]
+    assert answered["data"]["answer"] == ANSWER

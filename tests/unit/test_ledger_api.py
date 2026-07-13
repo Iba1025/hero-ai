@@ -83,10 +83,14 @@ def repo_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_statements(session: Any, ticket_id: uuid.UUID) -> list[Any]:
         return []
 
+    async def fake_conversation(session: Any, ticket_id: uuid.UUID) -> list[Any]:
+        return []
+
     monkeypatch.setattr(tickets_router, "get_ticket_for_org", fake_get_ticket)
     monkeypatch.setattr(tickets_router, "list_ticket_events", fake_events)
     monkeypatch.setattr(tickets_router, "get_diagnoses_with_claims", fake_diagnoses)
     monkeypatch.setattr(tickets_router, "get_statements_for_ticket", fake_statements)
+    monkeypatch.setattr(tickets_router, "list_conversation_messages", fake_conversation)
 
 
 @pytest.mark.asyncio

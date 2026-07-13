@@ -46,6 +46,8 @@ Hardening rows H1–H5 are recorded as backlog entries in the PRD (§6).
   requires coherent times. → **H4**.
 - **In-memory rate limiter resets on API restart** and can't protect a multi-worker or
   LLM-fronted surface (already BL-15; grows up in Phase 5 STEP 3 → Postgres-backed).
+  ✅ Resolved 2026-07-13: `rate_limit_event` table + `hero.api.ratelimit.allow` —
+  the window lives in Postgres (DB clock), restart- and multi-worker-safe.
 
 ## Retrieval-quality observation (re-test after real manual ingestion)
 

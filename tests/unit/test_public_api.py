@@ -17,7 +17,6 @@ import pytest
 
 from hero.api import background, deps
 from hero.api.main import create_app
-from hero.api.ratelimit import limiter
 from hero.api.routers import public as public_router
 from hero.graph.state import MediaRef
 
@@ -62,8 +61,18 @@ class _FakeEvent:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_limiter() -> None:
-    limiter.reset()
+def _fake_rate_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Postgres-backed limiter (BL-15) needs a real session — fake it here
+    with in-memory per-key counting so the 429 path still gets exercised."""
+    counts: dict[str, int] = {}
+
+    async def fake_allow(
+        session: Any, key: str, *, max_events: int, window_seconds: float = 3600.0
+    ) -> bool:
+        counts[key] = counts.get(key, 0) + 1
+        return counts[key] <= max_events
+
+    monkeypatch.setattr(public_router, "rate_allow", fake_allow)
 
 
 @pytest.fixture(autouse=True)

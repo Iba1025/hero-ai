@@ -22,6 +22,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from hero.nova.bridge import post_run_update
 from hero.storage.ledger import events_from_state
 from hero.storage.models import Ticket
 from hero.storage.repo import (
@@ -63,6 +64,13 @@ async def persist_completion(
     elif result.get("pending_question"):
         status = "clarifying"
 
+    # Escalation is sticky (INV-1 spirit): a Nova guardrail may have escalated
+    # this ticket mid-run (hazard in chat, Phase 5 STEP 3) — a completing run
+    # never downgrades it back to diagnosed/clarifying. A human owns it now.
+    current = await get_ticket(session, ticket_id)
+    if current is not None and current.status == "escalated":
+        status = "escalated"
+
     diag = await persist_diagnosis_from_state(
         session, ticket_id=ticket_id, run_id=run_id, state=result
     )
@@ -80,6 +88,16 @@ async def persist_completion(
 
     await update_ticket_status(session, ticket_id, status)
     await update_pipeline_status(session, ticket_id, pipeline_status_from_result(result))
+
+    # Nova (Phase 5 STEP 3): chat-originated tickets hear back in the chat —
+    # the CLARIFY question, the completion notice, or the escalation banner
+    # (fixed copy; no-op for form/operator tickets).
+    await post_run_update(
+        session,
+        ticket_id=ticket_id,
+        status=status,
+        pending_question=result.get("pending_question"),
+    )
     return status
 
 
