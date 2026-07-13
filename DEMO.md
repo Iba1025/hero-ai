@@ -34,10 +34,20 @@ Edit `.env` — the demo needs these filled in:
 
 Everything else (Qdrant, Langfuse, model API keys) is optional for the demo and can stay blank.
 
-Migrate the schema:
+Migrate the schema — **note:** `alembic/env.py` (and the invariant-test conftest) read
+`os.environ`, not `.env`, so export `DATABASE_URL` first:
 
 ```bash
+export DATABASE_URL='postgresql+asyncpg://hero:hero@localhost:5432/hero'
 uv run alembic upgrade head
+```
+
+Running the DB-backed invariant tests? Point them at a **dedicated scratch database**
+(the fixture runs `create_all`/`drop_all` — never aim it at the demo DB):
+
+```bash
+createdb -U hero hero_test   # once
+DATABASE_URL='postgresql+asyncpg://hero:hero@localhost:5432/hero_test' uv run pytest tests/invariants/
 ```
 
 ## 1. Seed the org, users, and building
@@ -140,6 +150,13 @@ it never asks a question and immediately shows "looking into it" (hard escalatio
 
 ## Gotchas (learned the hard way)
 
+- **First ticket against a fresh database can wedge permanently** (until BL-19 lands):
+  the intake handler holds its INSERT transaction open while the checkpointer's
+  `setup()` runs `CREATE INDEX CONCURRENTLY`, which waits on that same transaction.
+  Avoid it by warming the checkpointer once before the first ticket:
+  `uv run python -c "import asyncio; from hero.api.deps import make_checkpointer; from hero.config import get_settings; asyncio.run(make_checkpointer(get_settings()))"`.
+  If already wedged: terminate both backends in `pg_stat_activity`, drop the invalid
+  `checkpoints_thread_id_idx`, run the warm-up command, restart the API.
 - **Rate limits are per-slug per-hour**: 10 intakes / 30 presigns per building link,
   20 answers per status link. Rapid rehearsal loops will hit 429 — mint a fresh building
   link (`hero.buildings create`) or restart the API (limiter is in-memory).
