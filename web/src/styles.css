@@ -543,3 +543,45 @@ textarea {
   padding: 8px 0;
   cursor: pointer;
 }
+
+/* ---- Nova chat (Phase 5): tenant conversation view ---- */
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 15px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubble.tenant {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-bottom-right-radius: 4px;
+}
+
+.bubble.nova {
+  align-self: flex-start;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+
+.working-note {
+  align-self: flex-start;
+  font-style: italic;
+  padding: 2px 4px;
+}
+
+.composer textarea {
+  min-height: 72px;
+}

@@ -102,8 +102,27 @@ export function Outcome({
       });
       setFiled(true);
     } catch (err) {
-      onAuthError(err);
-      setSubmitError(err instanceof ApiError ? err.message : "Could not file outcome");
+      // H5 (FRICTION.md): a failure must say whether the outcome was recorded
+      // and give a retry path. Deliberately NOT bouncing to the login screen
+      // here — that would silently destroy the filled-in form (the outcome
+      // data is the flywheel, BL-0).
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          setSubmitError(
+            "Your outcome was NOT filed — your sign-in expired. Sign in again in another tab, then press “File outcome” here; everything you entered is kept.",
+          );
+        } else if (err.status >= 500) {
+          setSubmitError(
+            "Something went wrong on our side, so we can’t confirm the outcome was recorded. Go back to the ticket list — if this ticket isn’t marked resolved, file it again.",
+          );
+        } else {
+          setSubmitError(`Your outcome was NOT filed — ${err.message}. Adjust it and try again.`);
+        }
+      } else {
+        setSubmitError(
+          "We didn’t get a response from the server, so we can’t confirm the outcome was recorded. Go back to the ticket list — if this ticket isn’t marked resolved, file it again.",
+        );
+      }
     } finally {
       setBusy(false);
     }

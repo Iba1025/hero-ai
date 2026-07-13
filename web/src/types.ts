@@ -92,6 +92,36 @@ export interface PublicStatus {
   question: string | null;
   description: string;
   created_at: string;
+  // True while the pipeline works in the background (BL-17) — the UI polls.
+  working: boolean;
+}
+
+// ---- Nova chat (Phase 5 STEP 4, DEC-23/24) ----
+
+export interface PublicChatMessage {
+  sender: "tenant" | "nova";
+  // Render hint only: escalation/redirect are banners, the rest are bubbles.
+  kind: string;
+  body: string;
+  created_at: string;
+}
+
+export interface PublicChatStart {
+  // Null when the opener was redirected (DEC-24): nothing was created.
+  status_slug: string | null;
+  status_path: string | null;
+  reply: PublicChatMessage;
+}
+
+export interface PublicChatReply {
+  reply: PublicChatMessage;
+  working: boolean;
+}
+
+export interface PublicConversation {
+  state: string;
+  working: boolean;
+  messages: PublicChatMessage[];
 }
 
 export type Verdict = "confirmed" | "partially_correct" | "wrong";

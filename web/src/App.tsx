@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
+import { Chat } from "./screens/Chat";
 import { Intake } from "./screens/Intake";
 import { Ledger } from "./screens/Ledger";
 import { Login } from "./screens/Login";
@@ -54,6 +55,8 @@ export function App() {
   // in the URL is the credential. Checked before any auth gating.
   const intakeMatch = /^#\/intake\/([A-Za-z0-9_-]+)$/.exec(route);
   if (intakeMatch) return <Intake slug={intakeMatch[1]} />;
+  const chatMatch = /^#\/chat\/([A-Za-z0-9_-]+)$/.exec(route);
+  if (chatMatch) return <Chat slug={chatMatch[1]} />;
   const statusMatch = /^#\/status\/([A-Za-z0-9_-]+)$/.exec(route);
   if (statusMatch) return <StatusPage slug={statusMatch[1]} />;
 

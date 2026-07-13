@@ -29,6 +29,7 @@ const STATE_LABELS: Record<string, string> = {
   safety_gate: "Safety gate",
   procure: "Procure",
   outcome: "Contractor outcome",
+  conversation: "Conversation",
   integrity_error: "Integrity error",
 };
 
@@ -136,6 +137,26 @@ function EntryBody({ entry, isLast }: { entry: LedgerEntry; isLast: boolean }) {
               </span>
             </div>
           ))}
+        </div>
+      );
+
+    case "conversation":
+      // Nova chat rows (Phase 5) — sender + kind + body, with the guardrail
+      // reason when one fired (operators see internals; tenants never do).
+      return (
+        <div>
+          <p className="entry-text">
+            <span className="mono soft">{str(d.sender) ?? "?"}</span>
+            {str(d.kind) && d.kind !== "chat" && (
+              <span className="badge" style={{ marginLeft: 6 }}>
+                {str(d.kind)!.replace("_", " ")}
+              </span>
+            )}
+          </p>
+          <p className="entry-text">{str(d.body)}</p>
+          {str(d.guardrail_reason) && (
+            <p className="entry-text mono soft">guardrail: {str(d.guardrail_reason)}</p>
+          )}
         </div>
       );
 

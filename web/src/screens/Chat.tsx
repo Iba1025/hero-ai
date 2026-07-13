@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { navigate } from "../App";
 import { tenantErrorCopy } from "../errors";
 import { MAX_PHOTO_BYTES, MAX_PHOTOS, uploadPhotos } from "../photos";
 
-export function Intake({ slug }: { slug: string }) {
+/** Nova chat opener (Phase 5 STEP 4, DEC-23): the first message IS the
+    intake. A redirected opener (DEC-24) creates nothing — the fixed copy is
+    shown and the tenant can rephrase. On success we go straight to the
+    status page, which renders the live conversation. */
+export function Chat({ slug }: { slug: string }) {
   const [buildingName, setBuildingName] = useState<string | null>(null);
   const [badLink, setBadLink] = useState(false);
-  const [description, setDescription] = useState("");
+  const [message, setMessage] = useState("");
   const [contact, setContact] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [redirectCopy, setRedirectCopy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [statusSlug, setStatusSlug] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -24,24 +29,8 @@ export function Intake({ slug }: { slug: string }) {
   if (badLink) {
     return (
       <div className="shell">
-        <div className="center muted">This link isn’t valid. Ask your building manager for a new one.</div>
-      </div>
-    );
-  }
-
-  if (statusSlug) {
-    const statusUrl = `${window.location.origin}${window.location.pathname}#/status/${statusSlug}`;
-    return (
-      <div className="shell">
-        <div className="center">
-          <div className="success-mark">✓</div>
-          <h1 style={{ fontSize: 20, margin: "0 0 8px" }}>Got it — we’re on it.</h1>
-          <p className="muted">Save this link to check progress or answer follow-up questions:</p>
-          <p>
-            <a className="linkbox" href={`#/status/${statusSlug}`}>
-              {statusUrl}
-            </a>
-          </p>
+        <div className="center muted">
+          This link isn’t valid. Ask your building manager for a new one.
         </div>
       </div>
     );
@@ -70,39 +59,55 @@ export function Intake({ slug }: { slug: string }) {
     if (fileInput.current) fileInput.current.value = "";
   };
 
-  const submit = async () => {
-    setSubmitting(true);
+  const send = async () => {
+    setSending(true);
     setError(null);
+    setRedirectCopy(null);
     try {
       const photos = await uploadPhotos(slug, files);
-      const created = await api.publicIntake(slug, {
-        description: description.trim(),
+      const started = await api.publicChatStart(slug, {
+        message: message.trim(),
         contact: contact.trim(),
         photos,
       });
-      setStatusSlug(created.status_slug);
+      if (started.status_slug) {
+        navigate(`/status/${started.status_slug}`);
+        return;
+      }
+      // DEC-24 redirect: nothing was created — show the fixed copy, keep the
+      // composer so the tenant can describe the maintenance problem instead.
+      setRedirectCopy(started.reply.body);
+      setMessage("");
     } catch (err) {
       setError(tenantErrorCopy(err, "report"));
     } finally {
-      setSubmitting(false);
+      setSending(false);
     }
   };
 
-  const ready = description.trim().length > 0 && contact.trim().length > 0;
+  const ready = message.trim().length > 0 && contact.trim().length > 0;
 
   return (
     <div className="shell">
       <div className="login-wrap">
-        <div className="brand">Report a problem</div>
+        <div className="brand">Message us about a problem</div>
         <p className="muted" style={{ margin: "0 0 12px" }}>
           {buildingName ?? "…"}
         </p>
 
+        <div className="chat-log">
+          <div className="bubble nova">
+            Hi — tell me what’s wrong in your home and I’ll get it looked at. A photo helps if
+            you have one.
+          </div>
+          {redirectCopy && <div className="banner">{redirectCopy}</div>}
+        </div>
+
         <label className="field">
           What’s wrong?
           <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
             placeholder="e.g. The radiator in the living room is cold and makes a banging noise"
             maxLength={4000}
           />
@@ -147,8 +152,8 @@ export function Intake({ slug }: { slug: string }) {
 
         {error && <div className="error">{error}</div>}
 
-        <button className="primary-btn" disabled={!ready || submitting} onClick={submit}>
-          {submitting ? "Sending…" : "Send report"}
+        <button className="primary-btn" disabled={!ready || sending} onClick={send}>
+          {sending ? "Sending…" : "Send"}
         </button>
       </div>
     </div>

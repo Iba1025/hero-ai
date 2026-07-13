@@ -45,7 +45,7 @@ class Building(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (Index("ix_building_org_id", "org_id"),)
@@ -76,7 +76,7 @@ class Ticket(Base):
     # operator-created tickets (they have no public status page).
     public_slug: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (
@@ -108,7 +108,7 @@ class Media(Base):
     # crypto.subtle, so the client-side hash is best-effort, never invented.
     sha256: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     ticket: Mapped[Ticket] = relationship(back_populates="media")
@@ -146,7 +146,7 @@ class Diagnosis(Base):
     escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     escalation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     ticket: Mapped[Ticket] = relationship(back_populates="diagnoses")
@@ -189,7 +189,7 @@ class WorkOrder(Base):
     sku: Mapped[str | None] = mapped_column(Text, nullable=True)
     body: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     ticket: Mapped[Ticket] = relationship(back_populates="work_orders")
@@ -216,7 +216,7 @@ class TicketEvent(Base):
     state: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (Index("ix_ticket_event_ticket_seq", "ticket_id", "seq"),)
@@ -261,7 +261,7 @@ class ConversationMessage(Base):
     # Chat-tier spend for model-generated rows; 0 for tenant/fixed-copy rows.
     cost_usd: Mapped[float] = mapped_column(Double, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (
@@ -290,7 +290,7 @@ class RateLimitEvent(Base):
     )
     key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (Index("ix_rate_limit_event_key_created_at", "key", "created_at"),)
@@ -323,7 +323,7 @@ class ContractorStatement(Base):
     free_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     unlabeled_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (
@@ -368,7 +368,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)  # argon2id
     role: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default="now()"
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     __table_args__ = (

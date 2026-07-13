@@ -3,6 +3,9 @@ import type {
   Me,
   OutcomeRequest,
   OutcomeResponse,
+  PublicChatReply,
+  PublicChatStart,
+  PublicConversation,
   PublicIntakeResponse,
   PublicPhoto,
   PublicPresignResponse,
@@ -47,8 +50,14 @@ export const api = {
   listTickets: () => request<TicketSummary[]>("/tickets"),
   getTicket: (id: string) => request<TicketDetail>(`/tickets/${id}`),
   getLedger: (id: string) => request<LedgerResponse>(`/tickets/${id}/ledger`),
+  // Timeout so a wedged server can never leave the UI at "Filing…" forever —
+  // the pilot-rehearsal outcome loss looked exactly like that (FRICTION.md).
   fileOutcome: (body: OutcomeRequest) =>
-    request<OutcomeResponse>("/outcomes", { method: "POST", body: JSON.stringify(body) }),
+    request<OutcomeResponse>("/outcomes", {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }),
 
   // ---- public tenant intake (P4-4): no session, the slug is the credential ----
   publicBuilding: (slug: string) =>
@@ -69,6 +78,20 @@ export const api = {
     request<PublicStatus>(`/public/status/${encodeURIComponent(statusSlug)}/answer`, {
       method: "POST",
       body: JSON.stringify({ answer }),
+    }),
+
+  // ---- Nova chat (Phase 5 STEP 4, DEC-23/24) ----
+  publicChatStart: (slug: string, body: { message: string; contact: string; photos: PublicPhoto[] }) =>
+    request<PublicChatStart>(`/public/buildings/${encodeURIComponent(slug)}/conversations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  publicConversation: (statusSlug: string) =>
+    request<PublicConversation>(`/public/status/${encodeURIComponent(statusSlug)}/messages`),
+  publicChatSend: (statusSlug: string, message: string) =>
+    request<PublicChatReply>(`/public/status/${encodeURIComponent(statusSlug)}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
     }),
 };
 

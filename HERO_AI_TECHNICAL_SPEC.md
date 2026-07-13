@@ -200,6 +200,24 @@ feed the pipeline. Public rate limiting is Postgres-backed (`rate_limit_event`,
 `hero.api.ratelimit.allow` — BL-15(2)): DB-clock sliding window, opportunistic prune, commits
 immediately; count-then-insert race = pilot-acceptable overshoot.
 
+**Nova chat UI + honest failure copy (Phase 5 STEP 4, DEC-23/24, BL-20/21)** `[IMPL:
+web/src/screens/Chat.tsx, web/src/screens/Status.tsx, web/src/errors.ts, web/src/photos.ts,
+alembic/versions/0009_fix_created_at_defaults.py]`: tenant chat entry is `#/chat/{building_slug}`
+(the opener IS the intake, photos included via the shared presign/upload helper); a redirected
+opener shows the fixed copy in-place and creates nothing; success navigates to
+`#/status/{slug}`, which now branches — chat tickets (any conversation rows) render the live
+transcript (bubbles; escalation/redirect/capped as banners) with a composer, form tickets keep
+the status card + one-shot answer box. Both views poll every 3s while `working` and show the
+honest "checking the equipment's manuals" copy (H1 UX). Tenant-facing failures go through
+`tenantErrorCopy` (BL-21): 4xx = NOT sent/retry safe, 5xx = may have gone through/refresh
+before resending, network = not sent. Contractor Outcome: 20s `fileOutcome` timeout, 401
+mid-submit keeps the form and says the outcome was NOT filed. Operator ledger renders
+`conversation` entries (sender/kind badge/body + guardrail reason). Timestamp coherence
+(BL-20): string-literal `server_default="now()"` was constant-folded by Postgres to the
+DDL-parse timestamp — models now use `text("now()")`, migration 0009 resets the five affected
+tables' defaults, and `tests/invariants/test_timestamp_defaults.py` pins every `created_at`
+default to the `now()` function and rejects the string form in new source.
+
 ---
 
 ## 4. Graph State `[IMPL: src/hero/graph/state.py]` (DEC-17: TicketState Pydantic + GraphState TypedDict)
