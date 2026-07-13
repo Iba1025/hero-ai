@@ -15,10 +15,9 @@ from typing import Any
 import httpx
 import pytest
 
-from hero.api import deps
+from hero.api import background, deps
 from hero.api.main import create_app
 from hero.api.ratelimit import limiter
-from hero.api.resume import NotAwaitingClarificationError
 from hero.api.routers import public as public_router
 from hero.graph.state import MediaRef
 
@@ -45,6 +44,15 @@ class _FakeTicket:
         self.status = status
         self.public_slug = STATUS_SLUG
         self.created_at = datetime(2026, 7, 12, 9, 0, tzinfo=UTC)
+        # BL-17 (H1): background pipeline is done unless a test says otherwise.
+        self.pipeline_status = "complete"
+
+
+class _FakeSession:
+    """Handlers commit the row themselves since BL-17 — give them a no-op."""
+
+    async def commit(self) -> None:
+        pass
 
 
 class _FakeEvent:
@@ -58,15 +66,22 @@ def _fresh_limiter() -> None:
     limiter.reset()
 
 
+@pytest.fixture(autouse=True)
+async def _drain_background() -> AsyncGenerator[None, None]:
+    """BL-17 (H1): let spawned (always-faked) background tasks finish."""
+    yield
+    await background.drain()
+
+
 @pytest.fixture
 async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[httpx.AsyncClient, None]:
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://unused:unused@localhost/unused")
     app = create_app()
 
-    async def _no_session() -> AsyncGenerator[Any, None]:
-        yield None
+    async def _fake_session() -> AsyncGenerator[Any, None]:
+        yield _FakeSession()
 
-    app.dependency_overrides[deps.get_db_session] = _no_session
+    app.dependency_overrides[deps.get_db_session] = _fake_session
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
@@ -90,7 +105,7 @@ def presign_fake(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def intake_fakes(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Capture create_ticket/create_media/run_and_persist calls."""
+    """Capture create_ticket/create_media calls and the spawned background run."""
     calls: dict[str, Any] = {"tickets": [], "media": [], "runs": []}
 
     async def fake_create_ticket(session: Any, **kwargs: Any) -> Any:
@@ -104,14 +119,14 @@ def intake_fakes(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def fake_get_graph() -> Any:
         return object()
 
-    async def fake_run_and_persist(graph: Any, session: Any, ticket: Any, **kwargs: Any) -> str:
-        calls["runs"].append({"ticket": ticket, **kwargs})
-        return "clarifying"
+    async def fake_run_ticket_pipeline(graph: Any, ticket_id: Any, **kwargs: Any) -> None:
+        calls["runs"].append({"ticket_id": ticket_id, **kwargs})
 
     monkeypatch.setattr(public_router, "create_ticket", fake_create_ticket)
     monkeypatch.setattr(public_router, "create_media", fake_create_media)
     monkeypatch.setattr(public_router, "get_graph", fake_get_graph)
-    monkeypatch.setattr(public_router, "run_and_persist", fake_run_and_persist)
+    monkeypatch.setattr(public_router, "run_ticket_pipeline", fake_run_ticket_pipeline)
+    monkeypatch.setattr(public_router, "get_session_factory", lambda: None)
     return calls
 
 
@@ -270,6 +285,9 @@ async def test_intake_happy_path_lands_in_building_org(
     assert created["tenant_contact"] == "555-0123"
     assert created["public_slug"] == out["status_slug"]
     assert intake_fakes["media"][0]["sha256"] is None
+    # BL-17 (H1): the POST returns before the run — drain the background task.
+    await background.drain()
+    assert intake_fakes["runs"][0]["ticket_id"] == TICKET_ID
     # Regression: the route once passed the raw MIME type ("image/jpeg") and
     # dropped sha256 — every photo-carrying ticket 500'd when DIAGNOSE built
     # TicketState. The dicts handed to the graph must validate as MediaRef.
@@ -309,18 +327,35 @@ async def test_status_unknown_slug_404(
 
 
 @pytest.mark.asyncio
-async def test_status_exposes_exactly_four_fields(
+async def test_status_exposes_exactly_five_fields(
     client: httpx.AsyncClient, status_fakes: _FakeTicket
 ) -> None:
-    """Trust boundary: plain phrase + question + own description + created_at.
-    No trade/urgency/org/diagnosis ever crosses this boundary."""
+    """Trust boundary: plain phrase + question + own description + created_at
+    + working flag (BL-17). No trade/urgency/org/diagnosis ever crosses this
+    boundary — and no pipeline vocabulary either, just a boolean."""
     resp = await client.get(f"/public/status/{STATUS_SLUG}")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"state", "question", "description", "created_at"}
+    assert set(body) == {"state", "question", "description", "created_at", "working"}
     assert body["state"] == "question for you"
     assert body["question"] == "Which unit?"  # from the last clarify_pending event
     assert body["description"] == "Radiator cold in unit 4"
+    assert body["working"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pipeline_status", ["queued", "running"])
+async def test_status_working_while_pipeline_runs(
+    client: httpx.AsyncClient, status_fakes: _FakeTicket, pipeline_status: str
+) -> None:
+    """BL-17 (H1): while the background run is live the tenant sees a plain
+    'working on it' — and the question is suppressed until the run parks."""
+    status_fakes.pipeline_status = pipeline_status
+    resp = await client.get(f"/public/status/{STATUS_SLUG}")
+    body = resp.json()
+    assert body["state"] == "working on it"
+    assert body["working"] is True
+    assert body["question"] is None
 
 
 @pytest.mark.asyncio
@@ -344,51 +379,70 @@ async def test_status_plain_language_mapping(
     assert body["question"] is None  # question only surfaces while clarifying
 
 
-# ---- answer → single resume path ----
+# ---- answer → background resume (single resume path inside the task) ----
 
 
-@pytest.mark.asyncio
-async def test_answer_goes_through_single_resume_path(
-    client: httpx.AsyncClient, status_fakes: _FakeTicket, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.fixture
+def answer_fakes(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Capture the spawned resume; neutralize the running-stamp DB write."""
     calls: list[dict[str, Any]] = []
 
     async def fake_get_graph() -> Any:
         return object()
 
-    async def fake_resume(
-        graph: Any, session: Any, *, ticket_id: uuid.UUID, answer: str
-    ) -> dict[str, Any]:
+    async def fake_resume_ticket_pipeline(
+        graph: Any, ticket_id: Any, *, answer: str, **kwargs: Any
+    ) -> None:
         calls.append({"ticket_id": ticket_id, "answer": answer})
-        status_fakes.status = "diagnosed"  # resume completed the run
-        return {"pending_question": None}
+
+    async def fake_update_pipeline_status(session: Any, ticket_id: Any, status: str) -> None:
+        pass
 
     monkeypatch.setattr(public_router, "get_graph", fake_get_graph)
-    monkeypatch.setattr(public_router, "resume_with_answer", fake_resume)
+    monkeypatch.setattr(public_router, "resume_ticket_pipeline", fake_resume_ticket_pipeline)
+    monkeypatch.setattr(public_router, "update_pipeline_status", fake_update_pipeline_status)
+    monkeypatch.setattr(public_router, "get_session_factory", lambda: None)
+    return calls
 
+
+@pytest.mark.asyncio
+async def test_answer_spawns_background_resume(
+    client: httpx.AsyncClient, status_fakes: _FakeTicket, answer_fakes: list[dict[str, Any]]
+) -> None:
+    """BL-17 (H1): the answer is accepted immediately; the resume happens in a
+    background task (which goes through the single resume path)."""
     resp = await client.post(f"/public/status/{STATUS_SLUG}/answer", json={"answer": "  Unit 4B  "})
     assert resp.status_code == 200
-    assert calls == [{"ticket_id": TICKET_ID, "answer": "Unit 4B"}]
     body = resp.json()
-    assert body["state"] == "being handled"
+    assert body["state"] == "working on it"
+    assert body["working"] is True
     assert body["question"] is None
+
+    await background.drain()
+    assert answer_fakes == [{"ticket_id": TICKET_ID, "answer": "Unit 4B"}]
 
 
 @pytest.mark.asyncio
 async def test_answer_400_when_nothing_pending(
-    client: httpx.AsyncClient, status_fakes: _FakeTicket, monkeypatch: pytest.MonkeyPatch
+    client: httpx.AsyncClient, status_fakes: _FakeTicket, answer_fakes: list[dict[str, Any]]
 ) -> None:
-    async def fake_get_graph() -> Any:
-        return object()
-
-    async def fake_resume(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise NotAwaitingClarificationError()
-
-    monkeypatch.setattr(public_router, "get_graph", fake_get_graph)
-    monkeypatch.setattr(public_router, "resume_with_answer", fake_resume)
-
+    status_fakes.status = "diagnosed"  # no clarify pending anymore
     resp = await client.post(f"/public/status/{STATUS_SLUG}/answer", json={"answer": "hello"})
     assert resp.status_code == 400
+    await background.drain()
+    assert answer_fakes == []
+
+
+@pytest.mark.asyncio
+async def test_answer_409_while_pipeline_running(
+    client: httpx.AsyncClient, status_fakes: _FakeTicket, answer_fakes: list[dict[str, Any]]
+) -> None:
+    """Double-fire guard: a second answer while the resume is running is rejected."""
+    status_fakes.pipeline_status = "running"
+    resp = await client.post(f"/public/status/{STATUS_SLUG}/answer", json={"answer": "again"})
+    assert resp.status_code == 409
+    await background.drain()
+    assert answer_fakes == []
 
 
 @pytest.mark.asyncio

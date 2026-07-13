@@ -19,11 +19,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hero.storage.ledger import events_from_state
-from hero.storage.repo import (
-    append_ticket_events,
-    persist_diagnosis_from_state,
-    update_ticket_status,
-)
+from hero.storage.repo import append_ticket_events
 
 _SANCTIONED: ContextVar[bool] = ContextVar("hero_resume_sanctioned", default=False)
 
@@ -89,12 +85,11 @@ async def resume_with_answer(
     events += events_from_state(result, resumed=True)
     await append_ticket_events(session, ticket_id=ticket_id, run_id=thread_id, events=events)
 
-    # Run may now be complete — persist diagnosis + per-claim results (BL-6).
-    if not result.get("pending_question"):
-        await persist_diagnosis_from_state(
-            session, ticket_id=ticket_id, run_id=thread_id, state=result
-        )
-        status = "escalated" if result.get("escalated") else "diagnosed"
-        await update_ticket_status(session, ticket_id, status)
+    # Persist whatever the resume produced — diagnosis + claims (BL-6), the
+    # work order (BL-18/H2), status, and pipeline_status (BL-17/H1). A run
+    # still parked at CLARIFY lands back on awaiting_tenant.
+    from hero.api.pipeline import persist_completion
+
+    await persist_completion(session, ticket_id=ticket_id, run_id=thread_id, result=result)
     await session.commit()
     return result

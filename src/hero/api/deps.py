@@ -13,9 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from hero.adapters.stub_calibrator import StubCalibrator
 from hero.adapters.stub_catalog import StubCatalogResolver
-from hero.adapters.stub_embedder import StubEmbedder
-from hero.adapters.stub_reranker import StubReranker
-from hero.adapters.stub_vlm import StubVLM
 from hero.api.resume import ResumeNotAllowedError, resume_sanctioned
 from hero.auth.tokens import TokenError, decode_session_token
 from hero.config import Settings, get_settings
@@ -86,6 +83,13 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Session factory for background pipeline runs (BL-17/H1): a run outlives
+    the request that spawned it, so it opens sessions of its own."""
+    settings = get_settings()
+    return _get_session_factory(settings.database_url)
+
+
 def make_calibrator(settings: Settings) -> Calibrator:
     """Select calibrator by CALIBRATOR_IMPL (DEC-5: platt default).
 
@@ -101,6 +105,50 @@ def make_calibrator(settings: Settings) -> Calibrator:
 
         return IsotonicCalibrator()
     return StubCalibrator()
+
+
+def make_embedder(settings: Settings) -> Any:
+    """Select embedder by EMBEDDER_IMPL (BL-19/H3: config, not a code edit)."""
+    if settings.embedder_impl == "colmodernvbert":
+        from hero.adapters.colmodernvbert import ColModernVBertEmbedder
+
+        return ColModernVBertEmbedder()
+    if settings.embedder_impl == "colqwen3":
+        raise ValueError("EMBEDDER_IMPL=colqwen3 has no adapter yet (BL-5 bake-off pending)")
+    from hero.adapters.stub_embedder import StubEmbedder
+
+    return StubEmbedder()
+
+
+def make_reranker(settings: Settings) -> Any:
+    """Select reranker by RERANKER_IMPL (DEC-8: self-hosted bge default for live)."""
+    if settings.reranker_impl == "bge":
+        from hero.adapters.bge_reranker import BGEReranker
+
+        return BGEReranker()
+    if settings.reranker_impl == "cohere":
+        from hero.adapters.cohere_reranker import CohereReranker
+
+        return CohereReranker()
+    from hero.adapters.stub_reranker import StubReranker
+
+    return StubReranker()
+
+
+def make_vlm(settings: Settings) -> Any:
+    """Select VLM by VLM_IMPL — tiered LiteLLM routing (DEC-18) or stub."""
+    if settings.vlm_impl == "litellm":
+        from hero.adapters.litellm_vlm import LiteLLMVLM
+
+        return LiteLLMVLM(
+            primary_model=settings.vlm_model_primary,
+            verify_model=settings.vlm_model_verify,
+            fallback_model=settings.vlm_model_fallback,
+            triage_model=settings.vlm_model_triage,
+        )
+    from hero.adapters.stub_vlm import StubVLM
+
+    return StubVLM()
 
 
 async def make_checkpointer(settings: Settings) -> Any:
@@ -152,21 +200,59 @@ class _ResumeGuardedGraph:
         return await self._graph.ainvoke(run_input, *args, **kwargs)
 
 
-async def get_graph() -> Any:
-    """Build the compiled graph, wrapped in the single-resume-path guard.
+_GRAPH_SINGLETON: Any = None
 
-    Uses AsyncPostgresSaver checkpointer (INV-6) — fails loudly without DATABASE_URL.
-    """
+
+async def _build_api_graph() -> Any:
+    """Assemble the serving graph: settings-selected adapters, Postgres
+    checkpointer (INV-6), wrapped in the single-resume-path guard."""
     settings = get_settings()
     checkpointer = await make_checkpointer(settings)
+
+    qdrant_client: Any | None = None
+    if settings.embedder_impl != "stub":
+        # Real retrieval needs Qdrant — fail loudly at startup, not per ticket.
+        from qdrant_client import QdrantClient
+
+        qdrant_client = QdrantClient(url=settings.qdrant_url, timeout=30)
+        qdrant_client.get_collections()
+
     graph = build_graph(
-        embedder=StubEmbedder(),
-        reranker=StubReranker(),
+        embedder=make_embedder(settings),
+        reranker=make_reranker(settings),
         calibrator=make_calibrator(settings),
-        vlm=StubVLM(),
+        vlm=make_vlm(settings),
         catalog=StubCatalogResolver(),
         checkpointer=checkpointer,
         grounding_threshold=settings.grounding_threshold,
         grounding_threshold_strict=settings.grounding_threshold_strict,
+        qdrant_client=qdrant_client,
     )
     return _ResumeGuardedGraph(graph)
+
+
+async def init_graph() -> Any:
+    """Build the graph singleton at startup (BL-19/H3), called from the lifespan.
+
+    Warming the checkpointer here (saver.setup() runs CREATE INDEX CONCURRENTLY)
+    kills the first-ticket self-deadlock: no request transaction can be open yet.
+    Model weights (live adapters) also load now — never on a user request.
+    """
+    global _GRAPH_SINGLETON
+    if _GRAPH_SINGLETON is None:
+        _GRAPH_SINGLETON = await _build_api_graph()
+    return _GRAPH_SINGLETON
+
+
+async def get_graph() -> Any:
+    """The serving graph singleton. Lazily builds only when the lifespan did
+    not run (unit-test ASGI transports); real serving always pre-builds."""
+    if _GRAPH_SINGLETON is None:
+        return await init_graph()
+    return _GRAPH_SINGLETON
+
+
+def reset_graph() -> None:
+    """Test hook: drop the singleton so the next build sees fresh settings."""
+    global _GRAPH_SINGLETON
+    _GRAPH_SINGLETON = None

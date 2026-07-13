@@ -120,6 +120,14 @@ class Settings(BaseSettings):
     embedder_impl: Literal["colmodernvbert", "colqwen3", "stub"] = Field(default="stub")
     reranker_impl: Literal["bge", "cohere", "stub"] = Field(default="stub")
     calibrator_impl: Literal["platt", "isotonic", "stub"] = Field(default="platt")
+    vlm_impl: Literal["litellm", "stub"] = Field(
+        default="stub",
+        description=(
+            "VLM adapter for the API graph (BL-19): 'litellm' = tiered live routing "
+            "(DEC-18), 'stub' = deterministic demo/test default. Live adapters load "
+            "at startup (lifespan), never on a user request"
+        ),
+    )
 
     # ── Retrieval / verification tuning ──────────────────────────────────
     grounding_threshold: float = Field(

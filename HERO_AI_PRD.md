@@ -193,14 +193,22 @@ INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, c
 | **BL-13** | Per-contractor ticket assignment (DEC-22): `contractor_id` on ticket, assignment action in the operator UI, contractor list filtered to assigned tickets | days | Phase 5 — pilot is org-scoped visibility; needed once orgs run multiple crews |
 | **BL-15** | Phase 5 hardening (P4-4 accepted caveats, must not evaporate): (1) R2 presigned PUTs get a server-enforced body-size condition — declared `content_length` is advisory today, a client can PUT a larger object; (2) public rate limiting survives multi-worker/multi-instance deploys — `SlidingWindowLimiter` is per-process memory, gunicorn `-w 4` quarters the budget (move to Postgres or Redis counters) | days | Phase 5 — single-worker pilot is safe; both bite the moment deployment topology changes |
 | **BL-14** | ⏸ Per-node timestamps in the ledger (node-level instrumentation feeding `ticket_event`) | deferred, low priority | Ledger events currently share the run-completion timestamp, ordered by `seq`; Langfuse spans already cover ops timing — this is an audit-artifact nicety, not a gap |
-| **BL-17** | **H1 — Async pipeline:** intake + clarify-answer POSTs create/update the ticket and return in <2s with the status link; the graph runs in a background task (lifespan task group; Postgres checkpointer makes runs resumable — INV-6); `pipeline_status` (`queued\|running\|awaiting_tenant\|complete\|failed`) readable via status/ticket endpoints. Kills the phone-timeout class, gives instant confirmation, makes duplicate-on-retry impossible (FRICTION.md). Prerequisite for Nova (DEC-23) | days | Phase 5 STEP 1 |
-| **BL-18** | **H2 — Work-order persistence:** `create_work_order` has zero callers; pipeline output (WO + SKU) must land in the `work_order` table and the ledger `procure` event must reference the row | hours | Phase 5 STEP 1 (graph exit path) |
-| **BL-19** | **H3 — Serving hardening bundle:** lifespan checkpointer warm-up (kills the first-ticket `CREATE INDEX CONCURRENTLY` self-deadlock), graph/model singleton (no per-request rebuild), first-request model load never paid by a user request | days | Phase 5 STEP 1 (serving path) |
+| **BL-17** | ✅ 2026-07-13: **H1 — Async pipeline** — intake + clarify-answer POSTs return in <2s (measured 0.03–0.28s live); graph runs in a tracked background task (`api/background.py`); `pipeline_status` (`queued\|running\|awaiting_tenant\|complete\|failed`, DB CHECK) on ticket + public status (`working` bool, no pipeline vocabulary across the P4-4 boundary); startup `recover_orphaned_runs` re-drives kill-9'd runs from the Postgres checkpoint (INV-6) — demonstrated live. Prerequisite for Nova (DEC-23) | days | Phase 5 STEP 1 |
+| **BL-18** | ✅ 2026-07-13: **H2 — Work-order persistence** — `persist_completion` (shared by create + resume paths) writes the `work_order` row pinned to the id RESOLVE minted, so the ledger `procure` event references the row PK directly — verified live | hours | Phase 5 STEP 1 (graph exit path) |
+| **BL-19** | ✅ 2026-07-13: **H3 — Serving hardening bundle** — `init_graph` in lifespan (checkpointer warm-up kills the first-ticket `CREATE INDEX CONCURRENTLY` self-deadlock; model weights load at boot, ~27s, never on a user request); graph/model singleton; live adapter selection is documented config (`VLM_IMPL`/`EMBEDDER_IMPL`/`RERANKER_IMPL`, spec §3) — retires the demo-night uncommitted deps.py bypass | days | Phase 5 STEP 1 (serving path) |
 | **BL-20** | **H4 — Timestamp source consistency:** `ticket_event` vs `ticket` rows showed 14:58 vs 22:12 for the same run (likely UTC/local mix); ledger credibility requires coherent times | hours | Phase 5 STEP 4 (chat renders times) |
 | **BL-21** | **H5 — Tenant-facing error UX:** human message, states clearly whether the report went through, retry guidance — no raw "Internal Server Error" on a successful submission (FRICTION.md) | days | Phase 5 STEP 4 |
 | **BL-16** | ⏸ Nova voice mode (DEC-25): STT/TTS with its own PIPEDA/residency review before any audio leaves the device | deferred | Fast-follow after text-first Nova; INV-2 review is the gate |
 | **BL-7** | ⏸ Region-level evidence grounding (patch-to-region) | deferred | Post-traction audit-artifact upgrade |
 | **BL-8** | ⏸ DuckDB/Parquet analytics split (DEC-4) | deferred | When flywheel scans compete with live traffic |
+
+**Corpus-coverage note (2026-07-13, BL-17 live verification):** with the pilot's 3 synthetic
+test manuals, any ticket outside their coverage (radiator, toilet, exhaust fan — fresh AND
+recovered runs alike) ends `escalated` with `diagnosis_unparseable`: the live primary model
+correctly returns `claims: []` rather than fabricate against irrelevant excerpts, and DIAGNOSE
+escalates per P3-1.5. This is the safety design working, but corpus thinness makes escalation
+the *common* case. Mitigation is real-manual ingestion + retrieval-quality re-test (the
+FRICTION.md retrieval observation), **scheduled before the Phase 5 STEP 4 phone loop**.
 
 ---
 

@@ -67,6 +67,9 @@ class Ticket(Base):
     trade: Mapped[str | None] = mapped_column(Text, nullable=True)
     complexity: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
+    # BL-17 (H1): background-pipeline progress, decoupled from `status`.
+    # queued → running → awaiting_tenant (CLARIFY interrupt) | complete | failed.
+    pipeline_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
     # P4-4 public intake: how to reach the tenant for CLARIFY (phone or email).
     tenant_contact: Mapped[str | None] = mapped_column(Text, nullable=True)
     # P4-4 public intake: unguessable per-ticket status-link slug; NULL for
@@ -74,6 +77,13 @@ class Ticket(Base):
     public_slug: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "pipeline_status IN ('queued', 'running', 'awaiting_tenant', 'complete', 'failed')",
+            name="pipeline_status_allowed",
+        ),
     )
 
     media: Mapped[list[Media]] = relationship(back_populates="ticket")

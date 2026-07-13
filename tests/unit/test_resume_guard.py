@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from langgraph.types import Command
 
+from hero.api import pipeline as pipeline_mod
 from hero.api import resume as resume_mod
 from hero.api.deps import _ResumeGuardedGraph
 from hero.api.resume import (
@@ -85,15 +86,15 @@ async def test_sanctioned_resume_records_the_question(monkeypatch: pytest.Monkey
     async def fake_append(session: Any, *, ticket_id: Any, run_id: str, events: Any) -> None:
         appended.extend(events)
 
-    async def fake_persist(session: Any, *, ticket_id: Any, run_id: str, state: Any) -> None:
-        pass
-
-    async def fake_status(session: Any, ticket_id: Any, status: str) -> None:
-        pass
+    async def fake_persist_completion(
+        session: Any, *, ticket_id: Any, run_id: str, result: Any
+    ) -> str:
+        return "diagnosed"
 
     monkeypatch.setattr(resume_mod, "append_ticket_events", fake_append)
-    monkeypatch.setattr(resume_mod, "persist_diagnosis_from_state", fake_persist)
-    monkeypatch.setattr(resume_mod, "update_ticket_status", fake_status)
+    # resume_with_answer imports persist_completion from hero.api.pipeline at
+    # call time — patch it at its home module (BL-17: shared completion path).
+    monkeypatch.setattr(pipeline_mod, "persist_completion", fake_persist_completion)
 
     class _FakeSession:
         async def commit(self) -> None:

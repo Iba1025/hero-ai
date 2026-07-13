@@ -157,6 +157,16 @@ async def update_ticket_status(session: AsyncSession, ticket_id: uuid.UUID, stat
         await session.flush()
 
 
+async def update_pipeline_status(
+    session: AsyncSession, ticket_id: uuid.UUID, pipeline_status: str
+) -> None:
+    """Stamp background-run progress (BL-17/H1): queued|running|awaiting_tenant|complete|failed."""
+    ticket = await session.get(Ticket, ticket_id)
+    if ticket is not None:
+        ticket.pipeline_status = pipeline_status
+        await session.flush()
+
+
 async def create_media(
     session: AsyncSession,
     *,
@@ -275,8 +285,14 @@ async def create_work_order(
     diagnosis_id: uuid.UUID | None,
     sku: str | None,
     body: dict[str, object],
+    work_order_id: uuid.UUID | None = None,
 ) -> WorkOrder:
+    """Persist a work order (BL-18/H2). `work_order_id` pins the PK to the id the
+    RESOLVE node minted into graph state, so the ledger `procure` event's
+    work_order_id references this row directly."""
     wo = WorkOrder(ticket_id=ticket_id, diagnosis_id=diagnosis_id, sku=sku, body=body)
+    if work_order_id is not None:
+        wo.id = work_order_id
     session.add(wo)
     await session.flush()
     return wo

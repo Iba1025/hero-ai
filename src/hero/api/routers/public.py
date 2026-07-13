@@ -20,10 +20,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hero.api.deps import get_db_session, get_graph
-from hero.api.pipeline import run_and_persist
+from hero.api import background
+from hero.api.deps import get_db_session, get_graph, get_session_factory
+from hero.api.pipeline import resume_ticket_pipeline, run_ticket_pipeline
 from hero.api.ratelimit import limiter
-from hero.api.resume import NotAwaitingClarificationError, resume_with_answer
 from hero.config import get_settings
 from hero.storage.media import presigned_upload_url
 from hero.storage.models import Building, Ticket
@@ -33,6 +33,7 @@ from hero.storage.repo import (
     get_building_by_slug,
     get_ticket_by_public_slug,
     list_ticket_events,
+    update_pipeline_status,
 )
 
 router = APIRouter()
@@ -88,6 +89,9 @@ class PublicStatusResponse(BaseModel):
     question: str | None = None
     description: str
     created_at: str
+    # BL-17 (H1): true while the pipeline is working in the background —
+    # deliberately a plain boolean, no pipeline vocabulary across this boundary.
+    working: bool = False
 
 
 class PublicAnswerRequest(BaseModel):
@@ -125,12 +129,18 @@ async def _pending_question(session: AsyncSession, ticket: Ticket) -> str | None
     return None
 
 
-def _status_response(ticket: Ticket, question: str | None) -> PublicStatusResponse:
+def _status_response(
+    ticket: Ticket, question: str | None, *, working: bool | None = None
+) -> PublicStatusResponse:
+    if working is None:
+        working = ticket.pipeline_status in ("queued", "running")
+    state = "working on it" if working else _PLAIN_STATUS.get(ticket.status, "looking into it")
     return PublicStatusResponse(
-        state=_PLAIN_STATUS.get(ticket.status, "looking into it"),
-        question=question,
+        state=state,
+        question=None if working else question,
         description=ticket.description,
         created_at=ticket.created_at.isoformat(),
+        working=working,
     )
 
 
@@ -217,22 +227,28 @@ async def public_intake(
             sha256=photo.sha256,
         )
 
+    ticket_id = ticket.id  # capture before commit — no lazy refresh later
+    await session.commit()
+
+    # BL-17 (H1): respond immediately; the graph runs in a background task.
     graph = await get_graph()
-    await run_and_persist(
-        graph,
-        session,
-        ticket,
-        # MediaRef wants the coarse kind ("image"), not the MIME type —
-        # content_type is validated image/* above. sha256 is best-effort.
-        media=[
-            {
-                "object_key": p.object_key,
-                "media_type": p.content_type.split("/")[0],
-                "sha256": p.sha256,
-            }
-            for p in request.photos
-        ],
-        sensor_readings=[],
+    background.spawn(
+        run_ticket_pipeline(
+            graph,
+            ticket_id,
+            # MediaRef wants the coarse kind ("image"), not the MIME type —
+            # content_type is validated image/* above. sha256 is best-effort.
+            media=[
+                {
+                    "object_key": p.object_key,
+                    "media_type": p.content_type.split("/")[0],
+                    "sha256": p.sha256,
+                }
+                for p in request.photos
+            ],
+            sensor_readings=[],
+            session_factory=get_session_factory(),
+        )
     )
     return PublicIntakeResponse(status_slug=status_slug, status_path=f"#/status/{status_slug}")
 
@@ -254,8 +270,9 @@ async def public_answer(
     request: PublicAnswerRequest,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
 ) -> PublicStatusResponse:
-    """Tenant answers the CLARIFY question — through the single resume path
-    (hero.api.resume, spec §4), same as the operator endpoint."""
+    """Tenant answers the CLARIFY question. The answer is accepted immediately
+    (BL-17/H1) and resumed in a background task — through the single resume
+    path (hero.api.resume, spec §4), same as the operator endpoint."""
     ticket = await _require_public_ticket(session, status_slug)
     settings = get_settings()
     _rate_gate(f"answer:{status_slug}", max_events=settings.public_answer_rate_per_hour)
@@ -264,11 +281,20 @@ async def public_answer(
     if not answer or len(answer) > _MAX_DESCRIPTION_CHARS:
         raise HTTPException(status_code=422, detail="Please write an answer")
 
-    graph = await get_graph()
-    try:
-        result = await resume_with_answer(graph, session, ticket_id=ticket.id, answer=answer)
-    except NotAwaitingClarificationError as exc:
-        raise HTTPException(status_code=400, detail="No question is waiting") from exc
+    if ticket.pipeline_status == "running":
+        raise HTTPException(status_code=409, detail="We're already working on it")
+    question = await _pending_question(session, ticket)
+    if ticket.status != "clarifying" or question is None:
+        raise HTTPException(status_code=400, detail="No question is waiting")
 
-    next_question = result.get("pending_question")
-    return _status_response(ticket, next_question if isinstance(next_question, str) else None)
+    ticket_id = ticket.id
+    await update_pipeline_status(session, ticket_id, "running")
+    await session.commit()
+
+    graph = await get_graph()
+    background.spawn(
+        resume_ticket_pipeline(
+            graph, ticket_id, answer=answer, session_factory=get_session_factory()
+        )
+    )
+    return _status_response(ticket, None, working=True)

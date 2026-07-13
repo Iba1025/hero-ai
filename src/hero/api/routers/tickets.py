@@ -9,9 +9,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hero.api.deps import AuthUser, get_current_user, get_db_session, get_graph, require_role
-from hero.api.pipeline import run_and_persist
-from hero.api.resume import NotAwaitingClarificationError, resume_with_answer
+from hero.api import background
+from hero.api.deps import (
+    AuthUser,
+    get_current_user,
+    get_db_session,
+    get_graph,
+    get_session_factory,
+    require_role,
+)
+from hero.api.pipeline import resume_ticket_pipeline, run_ticket_pipeline
 from hero.storage.ledger import assemble_ledger
 from hero.storage.models import Ticket
 from hero.storage.repo import (
@@ -23,6 +30,7 @@ from hero.storage.repo import (
     get_ticket_for_org,
     list_ticket_events,
     list_tickets_for_org,
+    update_pipeline_status,
 )
 
 router = APIRouter()
@@ -40,6 +48,8 @@ class CreateTicketResponse(BaseModel):
     ticket_id: str
     thread_id: str
     status: str
+    # BL-17 (H1): the POST returns before the graph runs — poll GET /tickets/{id}.
+    pipeline_status: str
 
 
 class ClarifyAnswerRequest(BaseModel):
@@ -70,6 +80,7 @@ class TicketStatusResponse(BaseModel):
     work_order_id: str | None = None
     sku: str | None = None
     pending_question: str | None = None
+    pipeline_status: str = "queued"
 
 
 @router.post("", response_model=CreateTicketResponse)
@@ -78,31 +89,35 @@ async def create_ticket(
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
     user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> CreateTicketResponse:
-    """Create a ticket row, run the graph, persist diagnosis + claims (DEC-6).
-
-    Persistence goes through the shared pipeline (hero.api.pipeline) — the
-    same one the public tenant intake uses (P4-4).
+    """Create the ticket row and return immediately (BL-17/H1); the graph runs
+    in a background task through the shared pipeline (hero.api.pipeline) — the
+    same one the public tenant intake uses (P4-4). Poll GET /tickets/{id}.
     """
-    graph = await get_graph()
-
     ticket = await repo_create_ticket(
         session,
         org_id=user.org_id,
         building_id=uuid.UUID(request.building_id),
         description=request.description,
     )
-    status = await run_and_persist(
-        graph,
-        session,
-        ticket,
-        media=request.media,
-        sensor_readings=request.sensor_readings,
+    ticket_id = ticket.id  # capture before commit — no lazy refresh later
+    await session.commit()
+
+    graph = await get_graph()
+    background.spawn(
+        run_ticket_pipeline(
+            graph,
+            ticket_id,
+            media=request.media,
+            sensor_readings=request.sensor_readings,
+            session_factory=get_session_factory(),
+        )
     )
 
     return CreateTicketResponse(
-        ticket_id=str(ticket.id),
-        thread_id=f"ticket-{ticket.id}",
-        status=status,
+        ticket_id=str(ticket_id),
+        thread_id=f"ticket-{ticket_id}",
+        status="open",
+        pipeline_status="queued",
     )
 
 
@@ -134,7 +149,7 @@ async def get_ticket(
     user: AuthUser = Depends(get_current_user),  # noqa: B008
 ) -> TicketStatusResponse:
     """Get ticket status, diagnosis, and claims. Org-scoped (P4-1)."""
-    await _require_ticket_in_org(session, ticket_id, user)
+    ticket = await _require_ticket_in_org(session, ticket_id, user)
 
     graph = await get_graph()
     thread_id = f"ticket-{ticket_id}"
@@ -142,7 +157,15 @@ async def get_ticket(
 
     state = await graph.aget_state(config)
     if state is None or not state.values:
-        raise HTTPException(status_code=404, detail="Ticket not found")
+        # BL-17 (H1): the run may not have checkpointed yet — the ticket row
+        # is still the truth. Poll until pipeline_status leaves queued/running.
+        return TicketStatusResponse(
+            ticket_id=str(ticket.id),
+            status=ticket.status,
+            trade=ticket.trade,
+            urgency=ticket.urgency,
+            pipeline_status=ticket.pipeline_status,
+        )
 
     values = state.values
     status = "open"
@@ -167,6 +190,7 @@ async def get_ticket(
         work_order_id=values.get("work_order_id"),
         sku=values.get("sku"),
         pending_question=values.get("pending_question"),
+        pipeline_status=ticket.pipeline_status,
     )
 
 
@@ -244,17 +268,30 @@ async def clarify_answer(
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
     user: AuthUser = Depends(require_role("operator", "admin")),  # noqa: B008
 ) -> dict[str, str]:
-    """Resume an interrupted run with a clarification answer. Org-scoped (P4-1).
+    """Accept a clarification answer and resume in the background (BL-17/H1).
 
-    Delegates to the single resume path (hero.api.resume, spec §4) — the only
-    place a resume may happen, so the ledger always records the round.
+    The resume itself goes through the single resume path (hero.api.resume,
+    spec §4) inside the background task — the only place a resume may happen,
+    so the ledger always records the round. Poll GET /tickets/{id}.
     """
     ticket = await _require_ticket_in_org(session, ticket_id, user)
+    if ticket.pipeline_status == "running":
+        raise HTTPException(status_code=409, detail="Pipeline is already running for this ticket")
+
     graph = await get_graph()
-    try:
-        await resume_with_answer(graph, session, ticket_id=ticket.id, answer=request.answer)
-    except NotAwaitingClarificationError as exc:
-        if exc.state_missing:
-            raise HTTPException(status_code=404, detail="Ticket not found") from exc
-        raise HTTPException(status_code=400, detail="Ticket is not awaiting clarification") from exc
-    return {"status": "resumed", "ticket_id": ticket_id}
+    # Fast pre-check on the checkpointed state — no model call, just a read.
+    config = {"configurable": {"thread_id": f"ticket-{ticket.id}"}}
+    state = await graph.aget_state(config)
+    if state is None or not state.values:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if not state.values.get("pending_question"):
+        raise HTTPException(status_code=400, detail="Ticket is not awaiting clarification")
+
+    await update_pipeline_status(session, ticket.id, "running")
+    await session.commit()
+    background.spawn(
+        resume_ticket_pipeline(
+            graph, ticket.id, answer=request.answer, session_factory=get_session_factory()
+        )
+    )
+    return {"status": "accepted", "ticket_id": ticket_id, "pipeline_status": "running"}

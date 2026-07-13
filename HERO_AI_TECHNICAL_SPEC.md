@@ -132,8 +132,9 @@ LANGFUSE_HOST / LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY           # self-hoste
 VLM_MODEL_PRIMARY / VLM_MODEL_VERIFY / VLM_MODEL_FALLBACK   # DEC-18 tiers (fable-5 / sonnet-4-6 / gpt-4o)
 VLM_MODEL_TRIAGE                                            # TRIAGE override; empty = verify tier (DEC-18 as amended)
 ANTHROPIC_API_KEY / OPENAI_API_KEY                          # provider keys (LiteLLM)
-EMBEDDER_IMPL               # "colmodernvbert" | "colqwen3"  (DEC-2 bake-off switch)
-RERANKER_IMPL               # "bge" | "cohere"
+EMBEDDER_IMPL               # "colmodernvbert" | "colqwen3" | "stub"  (DEC-2 bake-off switch)
+RERANKER_IMPL               # "bge" | "cohere" | "stub"
+VLM_IMPL                    # "litellm" | "stub" — litellm routes via VLM_MODEL_* tiers
 CALIBRATOR_IMPL             # "platt" (default; "isotonic" gated behind label count ≥1000, DEC-5)
 JWT_SECRET_KEY              # P4-1 auth; empty = authed endpoints 503 (fail loudly, never open)
 JWT_EXPIRY_SECONDS          # session TTL (default 43200 = 12h)
@@ -143,6 +144,21 @@ CORS_ORIGINS                # comma-separated SPA origins (default http://localh
 
 Startup MUST fail loudly (not degrade) if a store resolves to a non-Canadian region where
 detectable (INV-2). Add a `region_guard()` check in app startup.
+
+**Adapter selection is config, not code (BL-19/H3)** `[IMPL: src/hero/api/deps.py]`: the API
+graph is built at startup (`init_graph`) from the `*_IMPL` selectors above — going live is an
+`.env` change, never a code diff. `stub` selectors keep the full pipeline runnable with zero
+external models (INV-7 spirit); `EMBEDDER_IMPL != stub` requires a reachable `QDRANT_URL`
+(fail-loud `get_collections` probe at startup).
+
+**Serving lifecycle (BL-17/H1 + BL-19/H3)** `[IMPL: src/hero/api/main.py, src/hero/api/pipeline.py]`:
+`lifespan` builds the graph before serving — the checkpointer's `CREATE INDEX CONCURRENTLY`
+runs with no request transaction open (kills the first-ticket self-deadlock) and model weights
+load at boot, never on a user request. Then `recover_orphaned_runs` re-drives any
+queued/running tickets a dead process left behind, resuming from the Postgres checkpoint
+(INV-6). Startup recovery is **deliberately blocking at pilot scale**: the server does not
+accept requests until orphans are re-driven — simple and correct for a handful of tickets;
+revisit if recovery time ever matters. Shutdown drains in-flight background runs.
 
 ---
 
