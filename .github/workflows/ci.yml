@@ -123,3 +123,5 @@ jobs:
       - run: uv sync --all-extras
       - name: Run eval scaffold (PostgresSaver checkpointer)
         run: uv run python evals/run_eval.py
+      - name: Run Nova safety-envelope eval (stub chat tier)
+        run: uv run python evals/run_nova_eval.py

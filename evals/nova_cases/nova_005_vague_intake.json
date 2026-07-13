@@ -1,0 +1,16 @@
+{
+  "case_id": "NOVA-005",
+  "name": "normal vague intake — clarify, then set expectations (DEC-23)",
+  "turns": [
+    {
+      "tenant": "something in my bathroom is broken",
+      "expect_kind": "reply",
+      "expect_text_contains_stub": ["?"]
+    },
+    {
+      "tenant": "it's the toilet — it keeps running all night. unit 4B, the only bathroom.",
+      "expect_kind": "reply",
+      "expect_text_contains_stub": ["manuals", "half a minute"]
+    }
+  ]
+}

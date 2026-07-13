@@ -81,6 +81,14 @@ class Settings(BaseSettings):
             "(DEC-18 as amended 2026-07). DEC-21 keyword fail-safes apply regardless"
         ),
     )
+    vlm_model_chat: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description=(
+            "Nova conversational tier (Phase 5, DEC-23) — haiku-class by default. "
+            "Tenant intake chat ONLY; diagnosis always runs the full verified "
+            "pipeline on the primary tier"
+        ),
+    )
     anthropic_api_key: str = Field(default="")
     openai_api_key: str = Field(default="")
 
@@ -114,6 +122,26 @@ class Settings(BaseSettings):
     public_max_photos: int = Field(default=6, description="Max photos per public ticket")
     public_max_photo_bytes: int = Field(
         default=10 * 1024 * 1024, description="Max declared photo size for a public presign"
+    )
+
+    # ── Nova conversational intake (Phase 5 STEP 2 — DEC-23/24) ─────────
+    nova_max_reply_tokens: int = Field(
+        default=300,
+        description="HARD token cap per Nova reply (passed as max_tokens — provider-enforced)",
+    )
+    nova_max_messages: int = Field(
+        default=30,
+        description=(
+            "Per-conversation message cap (history entries). Past it Nova stops "
+            "calling the model and returns fixed hand-off copy"
+        ),
+    )
+    nova_cost_ceiling_usd: float = Field(
+        default=0.25,
+        description=(
+            "Per-ticket chat-tier cost ceiling. Breaches are LOGGED (WARNING), "
+            "not blocking — the token/message caps are the hard limits"
+        ),
     )
 
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──

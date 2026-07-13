@@ -4,6 +4,8 @@ Tiered routing:
 - Primary (claude-fable-5): DIAGNOSE, TRIAGE — reasoning-heavy calls.
 - Verify (claude-sonnet-4-6): decompose_claims, check_entailment — high-volume.
 - Fallback (gpt-4o): cross-provider failover for both tiers via LiteLLM.
+- Chat (claude-haiku-4-5): Nova tenant intake conversation (Phase 5, DEC-23) —
+  prose replies under a hard max_tokens cap, never diagnosis.
 
 All model IDs are config-driven, never hard-coded (DEC-18).
 Prompts loaded from src/hero/prompts/*.md at import time.
@@ -21,7 +23,12 @@ import litellm
 from pydantic import ValidationError
 
 from hero.graph.state import Claim, Hypothesis, SufficiencyResult, TicketState, TriageResult
-from hero.interfaces.vlm import DiagnosisParseError, SufficiencyParseError, TriageParseError
+from hero.interfaces.vlm import (
+    ChatReply,
+    DiagnosisParseError,
+    SufficiencyParseError,
+    TriageParseError,
+)
 from hero.verification.claims import gather_evidence_text
 
 logger = logging.getLogger(__name__)
@@ -189,10 +196,14 @@ class LiteLLMVLM:
         verify_model: str = "claude-sonnet-4-6",
         fallback_model: str = "gpt-4o",
         triage_model: str = "",
+        chat_model: str = "claude-haiku-4-5-20251001",
     ) -> None:
         self._primary = primary_model
         self._verify = verify_model
         self._fallback = fallback_model
+        # Nova conversational tier (Phase 5, DEC-23): haiku-class by default —
+        # intake chat is high-volume small-talk, never diagnosis.
+        self._chat = chat_model
         # Empty = triage on the verify tier (DEC-18 as amended 2026-07 after
         # the P3-4 experiment: sonnet triage matched fable on routing quality
         # at ~1/3 the latency and cost, with zero run-to-run flips). Non-empty
@@ -252,8 +263,13 @@ class LiteLLMVLM:
             self._log_cost(response, tier, time.monotonic() - t0)
             return content
 
-    def _log_cost(self, response: object, tier: str, elapsed_s: float) -> None:
-        """Log and accumulate LiteLLM-computed cost + token usage per call."""
+    def _log_cost(self, response: object, tier: str, elapsed_s: float) -> float:
+        """Log and accumulate LiteLLM-computed cost + token usage per call.
+
+        Returns this call's cost so the chat tier can report per-reply cost
+        (Nova per-ticket cost ceiling, Phase 5 STEP 2) without draining the
+        accumulated buckets.
+        """
         try:
             cost = getattr(response, "_hidden_params", {}).get("response_cost")
             usage = getattr(response, "usage", None)
@@ -281,8 +297,10 @@ class LiteLLMVLM:
             bucket["prompt_tokens"] += int(prompt_tokens or 0)
             bucket["completion_tokens"] += int(completion_tokens or 0)
             bucket["latency_s"] += elapsed_s
+            return float(cost or 0.0)
         except Exception:  # never let metrics logging break a call
             logger.debug("[VLM-COST] tier=%s cost unavailable", tier)
+            return 0.0
 
     async def triage(self, description: str) -> TriageResult:
         """Classify trade + urgency + complexity.
@@ -363,3 +381,43 @@ class LiteLLMVLM:
             return bool(data)
         except (json.JSONDecodeError, TypeError):
             return "true" in raw.lower()
+
+    async def chat(
+        self, *, system: str, messages: list[dict[str, str]], max_tokens: int
+    ) -> ChatReply:
+        """Nova conversational tier (Phase 5, DEC-23) — CHAT model, prose output.
+
+        No response_format (replies are chat text, not JSON) and a HARD
+        max_tokens cap per reply — the provider truncates, so a runaway
+        reply cannot blow the cost envelope. Guardrails run before this
+        (hero.nova.guardrails): hazard messages never get here.
+        """
+        msgs = [{"role": "system", "content": system}, *messages]
+        t0 = time.monotonic()
+        try:
+            logger.info("[VLM] tier=chat model=%s", self._chat)
+            response = await litellm.acompletion(
+                model=self._chat,
+                messages=msgs,
+                max_tokens=max_tokens,
+                fallbacks=[self._fallback],
+            )
+            content: str = response.choices[0].message.content or ""
+            logger.info("[VLM] tier=chat model=%s served_by=%s", self._chat, response.model)
+            cost = self._log_cost(response, "chat", time.monotonic() - t0)
+            return ChatReply(text=content, cost_usd=cost)
+        except Exception:
+            logger.warning(
+                "[VLM] tier=chat model=%s failed, trying fallback=%s",
+                self._chat,
+                self._fallback,
+            )
+            response = await litellm.acompletion(
+                model=self._fallback,
+                messages=msgs,
+                max_tokens=max_tokens,
+            )
+            content = response.choices[0].message.content or ""
+            logger.info("[VLM] tier=chat served_by=%s (fallback)", self._fallback)
+            cost = self._log_cost(response, "chat", time.monotonic() - t0)
+            return ChatReply(text=content, cost_usd=cost)

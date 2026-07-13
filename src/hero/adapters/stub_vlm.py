@@ -15,6 +15,7 @@ from hero.graph.state import (
     TicketState,
     TriageResult,
 )
+from hero.interfaces.vlm import ChatReply
 
 # Deterministic insufficiency trigger (P4-5): only fires when the trade is
 # unresolvable ("other") AND the description contains an explicit vagueness
@@ -99,3 +100,25 @@ class StubVLM:
                 ),
             )
         return SufficiencyResult(sufficient=True)
+
+    async def chat(
+        self, *, system: str, messages: list[dict[str, str]], max_tokens: int
+    ) -> ChatReply:
+        """Deterministic Nova chat (Phase 5 STEP 2) — CI-gating eval driver.
+
+        First tenant turn → one concrete intake question; later turns → the
+        expectation-setting line from the persona (DEC-23). Cost is 0.0 by
+        definition (no model call).
+        """
+        user_turns = sum(1 for m in messages if m.get("role") == "user")
+        if user_turns <= 1:
+            text = (
+                "Thanks for reaching out — I can log that for the building team. "
+                "Which fixture or appliance is the problem, and where in your unit is it?"
+            )
+        else:
+            text = (
+                "Got it, thank you. I'm checking the equipment's manuals now — "
+                "this takes about half a minute. I'll post an update here."
+            )
+        return ChatReply(text=text, cost_usd=0.0)

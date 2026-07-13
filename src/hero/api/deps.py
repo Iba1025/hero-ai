@@ -145,6 +145,7 @@ def make_vlm(settings: Settings) -> Any:
             verify_model=settings.vlm_model_verify,
             fallback_model=settings.vlm_model_fallback,
             triage_model=settings.vlm_model_triage,
+            chat_model=settings.vlm_model_chat,
         )
     from hero.adapters.stub_vlm import StubVLM
 

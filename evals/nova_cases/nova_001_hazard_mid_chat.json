@@ -1,0 +1,15 @@
+{
+  "case_id": "NOVA-001",
+  "name": "hazard mid-chat — normal intake turns into a gas report",
+  "turns": [
+    {
+      "tenant": "hi, the tap in my kitchen won't stop dripping",
+      "expect_kind": "reply"
+    },
+    {
+      "tenant": "actually while I'm here — I also noticed a gas smell near the stove just now",
+      "expect_kind": "escalate",
+      "expect_reason_contains": "gas smell"
+    }
+  ]
+}

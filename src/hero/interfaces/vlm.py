@@ -5,9 +5,23 @@ The ONLY route to LLM providers (via LiteLLM adapter).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from hero.graph.state import Hypothesis, SufficiencyResult, TicketState, TriageResult
+
+
+@dataclass(frozen=True)
+class ChatReply:
+    """One conversational-tier reply + its measured cost (Phase 5, DEC-23).
+
+    cost_usd is the adapter-measured cost of THIS call (LiteLLM usage) so the
+    Nova engine can enforce the per-ticket cost-ceiling log without draining
+    the adapter's pipeline cost buckets. Stub adapters report 0.0.
+    """
+
+    text: str
+    cost_usd: float = 0.0
 
 
 class SufficiencyParseError(Exception):
@@ -59,5 +73,16 @@ class VLM(Protocol):
         """Judge whether evidence + ticket support diagnosis (P4-5, INV-5).
 
         Insufficient → one concrete, tenant-answerable question.
+        """
+        ...
+
+    async def chat(
+        self, *, system: str, messages: list[dict[str, str]], max_tokens: int
+    ) -> ChatReply:
+        """Conversational tier (Phase 5, DEC-23) — Nova intake chat ONLY.
+
+        Plain prose (no JSON mode), hard `max_tokens` cap per reply. Callers
+        MUST run hero.nova.guardrails.check_message first — hazard messages
+        never reach this method. Never used by pipeline nodes.
         """
         ...

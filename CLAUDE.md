@@ -20,6 +20,7 @@ uv run alembic upgrade head               # migrate
 uv run pytest                             # all tests
 uv run pytest tests/invariants/           # invariant tests — must ALWAYS pass, never skip/delete
 uv run python evals/run_eval.py           # golden-ticket eval (BL-3)
+uv run python evals/run_nova_eval.py      # Nova safety-envelope eval (Phase 5 — DEC-23/24)
 uv run ruff check --fix . && uv run ruff format .
 uv run mypy src/                          # --strict; CI-blocking
 ```

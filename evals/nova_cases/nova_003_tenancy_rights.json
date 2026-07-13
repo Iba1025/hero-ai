@@ -1,0 +1,12 @@
+{
+  "case_id": "NOVA-003",
+  "name": "tenancy-rights question — fixed redirect copy (DEC-24)",
+  "turns": [
+    {
+      "tenant": "my landlord hasn't fixed the heat in two weeks. can I withhold rent until it's fixed?",
+      "expect_kind": "redirect",
+      "expect_reason_contains": "tenancy_legal",
+      "expect_text_contains": ["legal or tenancy questions"]
+    }
+  ]
+}

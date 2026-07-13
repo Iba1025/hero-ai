@@ -131,6 +131,10 @@ R2_ENDPOINT / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY   # bucket reg
 LANGFUSE_HOST / LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY           # self-hosted
 VLM_MODEL_PRIMARY / VLM_MODEL_VERIFY / VLM_MODEL_FALLBACK   # DEC-18 tiers (fable-5 / sonnet-4-6 / gpt-4o)
 VLM_MODEL_TRIAGE                                            # TRIAGE override; empty = verify tier (DEC-18 as amended)
+VLM_MODEL_CHAT              # Nova intake chat tier (DEC-23) — haiku-class default, never diagnosis
+NOVA_MAX_REPLY_TOKENS       # HARD per-reply token cap (default 300, provider-enforced)
+NOVA_MAX_MESSAGES           # per-conversation message cap (default 30 → fixed hand-off copy)
+NOVA_COST_CEILING_USD       # per-ticket chat cost ceiling (default 0.25) — logged, not blocking
 ANTHROPIC_API_KEY / OPENAI_API_KEY                          # provider keys (LiteLLM)
 EMBEDDER_IMPL               # "colmodernvbert" | "colqwen3" | "stub"  (DEC-2 bake-off switch)
 RERANKER_IMPL               # "bge" | "cohere" | "stub"
@@ -159,6 +163,20 @@ queued/running tickets a dead process left behind, resuming from the Postgres ch
 (INV-6). Startup recovery is **deliberately blocking at pilot scale**: the server does not
 accept requests until orphans are re-driven — simple and correct for a handful of tickets;
 revisit if recovery time ever matters. Shutdown drains in-flight background runs.
+
+**Nova safety envelope (Phase 5 STEP 2, DEC-23/24)** `[IMPL: src/hero/nova/, src/hero/prompts/nova.md, evals/run_nova_eval.py]`:
+every tenant chat message passes `hero.nova.guardrails.check_message` — a deterministic,
+no-LLM pre-filter — before any model call. Hazard keywords (reused from `safety/hazards.py`,
+single source of truth) → instant escalation with NO conversational reply; prompt-injection
+markers and legal/tenancy, medical, safety-advice questions → fixed redirect copy (reviewed
+like code, never generated). Allowed messages go to the conversational tier via the VLM
+Protocol's `chat()` (`VLM_MODEL_CHAT`, haiku-class) under a HARD per-reply `max_tokens` cap
+and a per-conversation message cap; per-ticket chat cost is logged against
+`NOVA_COST_CEILING_USD` (WARNING on breach, non-blocking). Diagnosis never happens in chat —
+the persona (`prompts/nova.md`) collects the report; the full verified pipeline (DIAGNOSE →
+VERIFY → SAFETY_GATE) keeps its depth (DEC-23). `evals/run_nova_eval.py` gates the envelope
+in CI on the deterministic stub tier; `--live` replays the same cases on the real chat model
+and prints verbatim transcripts.
 
 ---
 
