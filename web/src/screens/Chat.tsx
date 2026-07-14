@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { navigate } from "../App";
 import { tenantErrorCopy } from "../errors";
-import { MAX_PHOTO_BYTES, MAX_PHOTOS, uploadPhotos } from "../photos";
+import { CameraIcon, NovaHeader, NovaStaticBubble, SendIcon } from "../nova-ui";
+import { appendPickedPhotos, uploadPhotos } from "../photos";
 
-/** Nova chat opener (Phase 5 STEP 4, DEC-23): the first message IS the
+/** Nova chat opener (DEC-23, reskinned per DEC-26): the first message IS the
     intake. A redirected opener (DEC-24) creates nothing — the fixed copy is
     shown and the tenant can rephrase. On success we go straight to the
     status page, which renders the live conversation. */
@@ -28,34 +29,20 @@ export function Chat({ slug }: { slug: string }) {
 
   if (badLink) {
     return (
-      <div className="shell">
-        <div className="center muted">
-          This link isn’t valid. Ask your building manager for a new one.
+      <div className="nova-shell">
+        <NovaHeader />
+        <div className="nova-chat">
+          <NovaStaticBubble>
+            This link isn’t valid. Ask your building manager for a new one.
+          </NovaStaticBubble>
         </div>
       </div>
     );
   }
 
   const addFiles = (picked: FileList | null) => {
-    if (!picked) return;
     setError(null);
-    const next = [...files];
-    for (const f of Array.from(picked)) {
-      if (next.length >= MAX_PHOTOS) {
-        setError(`At most ${MAX_PHOTOS} photos.`);
-        break;
-      }
-      if (!f.type.startsWith("image/")) {
-        setError("Only photos can be attached.");
-        continue;
-      }
-      if (f.size > MAX_PHOTO_BYTES) {
-        setError(`“${f.name}” is too large (max ${MAX_PHOTO_BYTES / (1024 * 1024)} MB).`);
-        continue;
-      }
-      next.push(f);
-    }
-    setFiles(next);
+    setFiles(appendPickedPhotos(files, picked, setError));
     if (fileInput.current) fileInput.current.value = "";
   };
 
@@ -88,45 +75,22 @@ export function Chat({ slug }: { slug: string }) {
   const ready = message.trim().length > 0 && contact.trim().length > 0;
 
   return (
-    <div className="shell">
-      <div className="login-wrap">
-        <div className="brand">Message us about a problem</div>
-        <p className="muted" style={{ margin: "0 0 12px" }}>
-          {buildingName ?? "…"}
-        </p>
+    <div className="nova-shell">
+      <NovaHeader />
 
-        <div className="chat-log">
-          <div className="bubble nova">
-            Hi — tell me what’s wrong in your home and I’ll get it looked at. A photo helps if
-            you have one.
-          </div>
-          {redirectCopy && <div className="banner">{redirectCopy}</div>}
-        </div>
+      <div className="nova-chat">
+        <NovaStaticBubble>
+          Hi — tell me what’s wrong in your home
+          {buildingName ? ` at ${buildingName}` : ""} and I’ll get it looked at. A photo helps if
+          you have one.
+        </NovaStaticBubble>
+        {redirectCopy && <div className="banner">{redirectCopy}</div>}
+        {error && <div className="error">{error}</div>}
+      </div>
 
-        <label className="field">
-          What’s wrong?
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="e.g. The radiator in the living room is cold and makes a banging noise"
-            maxLength={4000}
-          />
-        </label>
-
-        <label className="field">
-          Photos (optional)
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            multiple
-            capture="environment"
-            onChange={(e) => addFiles(e.target.files)}
-            style={{ marginTop: 6 }}
-          />
-        </label>
+      <div className="nova-footer">
         {files.length > 0 && (
-          <div className="chips">
+          <div className="nova-chips">
             {files.map((f, i) => (
               <button
                 key={`${f.name}-${i}`}
@@ -139,7 +103,7 @@ export function Chat({ slug }: { slug: string }) {
           </div>
         )}
 
-        <label className="field">
+        <label className="nova-field">
           Phone or email — so we can reach you with questions
           <input
             type="text"
@@ -150,11 +114,39 @@ export function Chat({ slug }: { slug: string }) {
           />
         </label>
 
-        {error && <div className="error">{error}</div>}
-
-        <button className="primary-btn" disabled={!ready || sending} onClick={send}>
-          {sending ? "Sending…" : "Send"}
-        </button>
+        <div className="nova-composer">
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            multiple
+            capture="environment"
+            onChange={(e) => addFiles(e.target.files)}
+            style={{ display: "none" }}
+          />
+          <button
+            className="round-btn"
+            aria-label="Add a photo"
+            onClick={() => fileInput.current?.click()}
+          >
+            <CameraIcon />
+          </button>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Type your message…"
+            maxLength={4000}
+            rows={1}
+          />
+          <button
+            className="round-btn send"
+            aria-label="Send"
+            disabled={!ready || sending}
+            onClick={send}
+          >
+            <SendIcon />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -218,6 +218,22 @@ DDL-parse timestamp — models now use `text("now()")`, migration 0009 resets th
 tables' defaults, and `tests/invariants/test_timestamp_defaults.py` pins every `created_at`
 default to the `now()` function and rejects the string form in new source.
 
+**Nova chat retheme + mid-chat photos (DEC-26, BL-22)** `[IMPL: web/src/nova-ui.tsx,
+web/src/screens/Chat.tsx, web/src/screens/Status.tsx, web/src/styles.css (.nova-* block),
+web/src/photos.ts, src/hero/api/routers/public.py]`: tenant chat surfaces (opener +
+conversation view) wear the founder's "Hero Diagnosis" visual language — yellow `#F5C518`
+frame, app-bar (history-back, hidden without history), avatar + dark `#2C2C2C` Nova bubbles,
+right-aligned white tenant bubbles, per-message timestamps, pill composer with circular
+camera/send buttons (inline SVG, zero new deps; the `design/` bundle is reference only and
+never built). The mock defined one static screen — all other states keep prior behavior in
+the new skin, and its copy/voice affordances were rejected per DEC-24/25 (deviations +
+WCAG AA shade fixes recorded in DEC-26). Mid-chat photos (BL-22):
+`POST /public/status/{slug}/presign` mints keys under the ticket's building with the intake
+caps; `POST …/messages` takes `photos` — media pointer rows (INV-3) plus one tenant
+`kind="photo"` transcript row appended before the text turn, nothing kept on a DEC-24
+redirect. In-flight runs are NOT fed (mid-run evidence injection is BL-23, design-first).
+Form status view, operator/contractor cockpit, pipeline, guardrails: untouched.
+
 ---
 
 ## 4. Graph State `[IMPL: src/hero/graph/state.py]` (DEC-17: TicketState Pydantic + GraphState TypedDict)
@@ -622,6 +638,14 @@ A schema-valid diagnosis still requires `VERIFY` + `safety_gate` — no shortcut
   queries; the query side additionally rejects any returned point with a stale stamp. Mismatch
   raises `IndexIntegrityError` — never degrade silently. Born from the 2026-07-10 incident:
   builtin `hash()` randomization left the sparse index silently dead and dense+RRF masked it.
+- **Vector-store persistence (2026-07-13 incident):** the local dev Qdrant ran from
+  `/tmp` and macOS's periodic cleaner purged the collections. Qdrant storage must live on a
+  durable path — local dev: `~/.hero/qdrant/` (binary + `./storage`, run from that cwd);
+  production: durable volume or managed instance, never ephemeral/anonymous storage.
+  Recovery path is re-ingestion, deliberately cheap because the CLI is idempotent on
+  `(doc_id, page)`: `uv run python -m hero.ingestion ingest <pdf> --manufacturer X
+  --model-codes A,B --embedder colmodernvbert` per corpus document, then
+  `check_index_integrity` + `bm25_canary` to confirm the index is live.
 - **Types:** mypy --strict passes. No `Any` in `graph/`, `interfaces/`, `safety/`.
 - **Lockfiles (asymmetric, deliberate):** `web/package-lock.json` is committed (npm resolution
   is too loose to reproduce without it); `uv.lock` stays gitignored — `pyproject.toml` pins are

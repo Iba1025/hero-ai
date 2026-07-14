@@ -21,21 +21,59 @@ export async function sha256Hex(file: File): Promise<string | null> {
   }
 }
 
-/** Presign + upload each photo; returns the pointers the intake body needs. */
-export async function uploadPhotos(slug: string, files: File[]): Promise<PublicPhoto[]> {
+/** Client-side picker validation shared by the opener and the mid-chat
+    composer: returns the new file list, reporting problems via onError. */
+export function appendPickedPhotos(
+  current: File[],
+  picked: FileList | null,
+  onError: (msg: string) => void,
+): File[] {
+  if (!picked) return current;
+  const next = [...current];
+  for (const f of Array.from(picked)) {
+    if (next.length >= MAX_PHOTOS) {
+      onError(`At most ${MAX_PHOTOS} photos.`);
+      break;
+    }
+    if (!f.type.startsWith("image/")) {
+      onError("Only photos can be attached.");
+      continue;
+    }
+    if (f.size > MAX_PHOTO_BYTES) {
+      onError(`“${f.name}” is too large (max ${MAX_PHOTO_BYTES / (1024 * 1024)} MB).`);
+      continue;
+    }
+    next.push(f);
+  }
+  return next;
+}
+
+type PresignFn = (body: {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+}) => Promise<{ upload_url: string; object_key: string }>;
+
+async function uploadAll(files: File[], presign: PresignFn): Promise<PublicPhoto[]> {
   const photos: PublicPhoto[] = [];
   for (const f of files) {
-    const presign = await api.publicPresign(slug, {
-      filename: f.name,
-      content_type: f.type,
-      size_bytes: f.size,
-    });
-    await uploadToPresigned(presign.upload_url, f);
+    const grant = await presign({ filename: f.name, content_type: f.type, size_bytes: f.size });
+    await uploadToPresigned(grant.upload_url, f);
     photos.push({
-      object_key: presign.object_key,
+      object_key: grant.object_key,
       content_type: f.type,
       sha256: await sha256Hex(f),
     });
   }
   return photos;
+}
+
+/** Presign + upload each photo; returns the pointers the intake body needs. */
+export function uploadPhotos(slug: string, files: File[]): Promise<PublicPhoto[]> {
+  return uploadAll(files, (body) => api.publicPresign(slug, body));
+}
+
+/** Same, but presigned via the status link (BL-22 mid-chat photos). */
+export function uploadPhotosMidChat(statusSlug: string, files: File[]): Promise<PublicPhoto[]> {
+  return uploadAll(files, (body) => api.publicStatusPresign(statusSlug, body));
 }

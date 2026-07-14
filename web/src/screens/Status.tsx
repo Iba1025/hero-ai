@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { tenantErrorCopy } from "../errors";
-import type { PublicChatMessage, PublicConversation, PublicStatus } from "../types";
+import { CameraIcon, NovaBubble, NovaHeader, SendIcon } from "../nova-ui";
+import { appendPickedPhotos, uploadPhotosMidChat } from "../photos";
+import type { PublicConversation, PublicStatus } from "../types";
 
 // Server sends the plain-language phrase; this adds one friendly sentence.
 const EXPLAIN: Record<string, string> = {
@@ -138,7 +140,7 @@ function FormStatusView({
   );
 }
 
-// ---- chat tickets (DEC-23/24) ----
+// ---- chat tickets (DEC-23/24, reskinned per DEC-26) ----
 
 function ConversationView({
   slug,
@@ -150,20 +152,31 @@ function ConversationView({
   onSent: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [conversation.messages.length]);
 
+  const addFiles = (picked: FileList | null) => {
+    setError(null);
+    setFiles(appendPickedPhotos(files, picked, setError));
+    if (fileInput.current) fileInput.current.value = "";
+  };
+
   const send = async () => {
     setSending(true);
     setError(null);
     try {
-      await api.publicChatSend(slug, draft.trim());
+      // BL-22: photos ride along via the status-link presign (INV-3).
+      const photos = await uploadPhotosMidChat(slug, files);
+      await api.publicChatSend(slug, draft.trim(), photos);
       setDraft("");
+      setFiles([]);
       await onSent(); // re-fetch the transcript — the server owns the truth
     } catch (err) {
       setError(tenantErrorCopy(err, "message"));
@@ -173,48 +186,67 @@ function ConversationView({
   };
 
   return (
-    <div className="shell">
-      <div className="login-wrap">
-        <div className="brand">Your report</div>
-        <p className="status-phrase" style={{ margin: "0 0 10px" }}>
-          {conversation.state}
-        </p>
+    <div className="nova-shell">
+      <NovaHeader />
 
-        <div className="chat-log">
-          {conversation.messages.map((m, i) => (
-            <ChatBubble key={i} message={m} />
-          ))}
-          {conversation.working && <div className="muted working-note">{WORKING_COPY}</div>}
-          <div ref={bottom} />
-        </div>
-
+      <div className="nova-chat">
+        {conversation.messages.map((m, i) => (
+          <NovaBubble key={i} message={m} />
+        ))}
+        {conversation.working && <div className="working-note">{WORKING_COPY}</div>}
         {error && <div className="error">{error}</div>}
+        <div ref={bottom} />
+      </div>
 
-        <div className="composer">
+      <div className="nova-footer">
+        {files.length > 0 && (
+          <div className="nova-chips">
+            {files.map((f, i) => (
+              <button
+                key={`${f.name}-${i}`}
+                className="chip"
+                onClick={() => setFiles(files.filter((_, j) => j !== i))}
+              >
+                {f.name} ✕
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="nova-composer">
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            multiple
+            capture="environment"
+            onChange={(e) => addFiles(e.target.files)}
+            style={{ display: "none" }}
+          />
+          <button
+            className="round-btn"
+            aria-label="Add a photo"
+            onClick={() => fileInput.current?.click()}
+          >
+            <CameraIcon />
+          </button>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Write a message"
+            placeholder="Type your message…"
             maxLength={4000}
+            rows={1}
           />
           <button
-            className="primary-btn"
+            className="round-btn send"
+            aria-label="Send"
             disabled={draft.trim().length === 0 || sending}
             onClick={send}
           >
-            {sending ? "Sending…" : "Send"}
+            <SendIcon />
           </button>
         </div>
       </div>
     </div>
   );
-}
-
-function ChatBubble({ message }: { message: PublicChatMessage }) {
-  // Banners for the fixed safety copy (DEC-24); bubbles for everything else.
-  if (message.kind === "escalation") return <div className="banner warn">{message.body}</div>;
-  if (message.kind === "redirect" || message.kind === "capped") {
-    return <div className="banner">{message.body}</div>;
-  }
-  return <div className={`bubble ${message.sender}`}>{message.body}</div>;
 }

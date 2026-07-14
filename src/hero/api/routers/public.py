@@ -32,6 +32,7 @@ from hero.nova.guardrails import check_message
 from hero.storage.media import presigned_upload_url
 from hero.storage.models import Building, ConversationMessage, Ticket
 from hero.storage.repo import (
+    append_conversation_message,
     create_media,
     create_ticket,
     get_building_by_slug,
@@ -133,6 +134,10 @@ class PublicChatStartResponse(BaseModel):
 
 class PublicChatMessageRequest(BaseModel):
     message: str
+    # BL-22 (M scope): mid-chat photo attach — pointers only (INV-3). The
+    # photos join the ticket's media + transcript; they do NOT feed a run
+    # already in flight (mid-run evidence injection is future work).
+    photos: list[PublicPhoto] = Field(default_factory=list)
 
 
 class PublicChatReplyResponse(BaseModel):
@@ -204,21 +209,12 @@ async def get_building(
     return PublicBuildingResponse(name=building.name)
 
 
-@router.post("/buildings/{slug}/presign", response_model=PublicPresignResponse)
-async def public_presign(
-    slug: str,
-    request: PublicPresignRequest,
-    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+def _presign_photo(
+    building_id: uuid.UUID, request: PublicPresignRequest, settings: Any
 ) -> PublicPresignResponse:
-    """Presigned PUT for a tenant photo (INV-3: bytes go straight to R2).
-
-    Image-only, size-capped at declaration time — the declared ContentType is
-    part of the signature, so a mismatched upload is rejected by R2.
-    """
-    building = await _require_building(session, slug)
-    settings = get_settings()
-    await _rate_gate(session, f"presign:{slug}", max_events=settings.public_presign_rate_per_hour)
-
+    """Shared presign core (INV-3: bytes go straight to R2). Image-only,
+    size-capped at declaration time — the declared ContentType is part of
+    the signature, so a mismatched upload is rejected by R2."""
     if not request.content_type.startswith("image/"):
         raise HTTPException(status_code=415, detail="Only image uploads are accepted")
     if not 0 < request.size_bytes <= settings.public_max_photo_bytes:
@@ -228,9 +224,39 @@ async def public_presign(
         )
 
     safe_name = _FILENAME_SAFE.sub("_", request.filename.rsplit("/", 1)[-1])[-100:] or "photo"
-    object_key = f"public-intake/{building.id}/{uuid.uuid4()}/{safe_name}"
+    object_key = f"public-intake/{building_id}/{uuid.uuid4()}/{safe_name}"
     url = presigned_upload_url(settings, object_key=object_key, content_type=request.content_type)
     return PublicPresignResponse(upload_url=url, object_key=object_key)
+
+
+@router.post("/buildings/{slug}/presign", response_model=PublicPresignResponse)
+async def public_presign(
+    slug: str,
+    request: PublicPresignRequest,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> PublicPresignResponse:
+    """Presigned PUT for an intake photo — building link holders."""
+    building = await _require_building(session, slug)
+    settings = get_settings()
+    await _rate_gate(session, f"presign:{slug}", max_events=settings.public_presign_rate_per_hour)
+    return _presign_photo(building.id, request, settings)
+
+
+@router.post("/status/{status_slug}/presign", response_model=PublicPresignResponse)
+async def public_status_presign(
+    status_slug: str,
+    request: PublicPresignRequest,
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> PublicPresignResponse:
+    """Presigned PUT for a mid-chat photo (BL-22) — status link holders.
+    Same image-only/size caps as the intake presign; keys live under the
+    ticket's building so downstream validation is identical."""
+    ticket = await _require_public_ticket(session, status_slug)
+    settings = get_settings()
+    await _rate_gate(
+        session, f"presign:{status_slug}", max_events=settings.public_presign_rate_per_hour
+    )
+    return _presign_photo(ticket.building_id, request, settings)
 
 
 def _validate_intake(
@@ -243,6 +269,11 @@ def _validate_intake(
         raise HTTPException(status_code=422, detail="Please describe the problem")
     if not contact or len(contact) > _MAX_CONTACT_CHARS:
         raise HTTPException(status_code=422, detail="A phone number or email is required")
+    _validate_photos(photos, settings)
+    return description, contact
+
+
+def _validate_photos(photos: list[PublicPhoto], settings: Any) -> None:
     if len(photos) > settings.public_max_photos:
         raise HTTPException(status_code=422, detail=f"At most {settings.public_max_photos} photos")
     for photo in photos:
@@ -250,7 +281,6 @@ def _validate_intake(
             raise HTTPException(status_code=415, detail="Only image uploads are accepted")
         if not photo.object_key.startswith("public-intake/"):
             raise HTTPException(status_code=422, detail="Unrecognized photo reference")
-    return description, contact
 
 
 async def _create_public_ticket(
@@ -468,9 +498,33 @@ async def public_chat_message(
     message = request.message.strip()
     if not message or len(message) > _MAX_DESCRIPTION_CHARS:
         raise HTTPException(status_code=422, detail="Please write a message")
+    _validate_photos(request.photos, settings)
     if not await has_conversation(session, ticket.id):
         # Form-intake tickets keep the status page + POST /answer flow.
         raise HTTPException(status_code=400, detail="This ticket has no conversation")
+
+    # BL-22: mid-chat photos join the ticket's media + transcript BEFORE the
+    # text turn (so the transcript reads photo → message → reply). A redirected
+    # message keeps nothing (DEC-24 spirit: not a maintenance report). Photos
+    # do NOT feed a run already in flight — mid-run evidence injection is
+    # future work (single-resume-path rule).
+    if request.photos and check_message(message).action != "redirect":
+        for photo in request.photos:
+            await create_media(
+                session,
+                ticket_id=ticket.id,
+                object_key=photo.object_key,
+                media_type=photo.content_type,
+                sha256=photo.sha256,
+            )
+        count = len(request.photos)
+        await append_conversation_message(
+            session,
+            ticket_id=ticket.id,
+            sender="tenant",
+            kind="photo",
+            body=f"{count} photo{'s' if count > 1 else ''} attached",
+        )
 
     question = await _pending_question(session, ticket)
     turn = await handle_tenant_message(

@@ -544,44 +544,231 @@ textarea {
   cursor: pointer;
 }
 
-/* ---- Nova chat (Phase 5): tenant conversation view ---- */
+/* ---- Nova chat (Phase 5, DEC-26): Hero-Diagnosis visual language ----
+   Palette from the mock: yellow #F5C518 frame, dark #2C2C2C Nova bubbles.
+   WCAG AA adjustments (recorded in DEC-26): timestamps use #6B4E00 instead
+   of the mock's #B8860B (2.0:1 on yellow); placeholder uses #6b7280 instead
+   of gray-400 (2.5:1 on white). */
 
-.chat-log {
+.nova-shell {
+  height: 100dvh;
+  max-width: 448px;
+  margin: 0 auto;
+  background: #f5c518;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+}
+
+.nova-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  flex: none;
+}
+
+.nova-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #000;
+  margin: 0;
+}
+
+.nova-header .icon-btn,
+.nova-header .icon-spacer {
+  width: 40px;
+  height: 40px;
+}
+
+.icon-btn {
+  border: none;
+  background: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nova-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nova-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.nova-row.tenant {
+  justify-content: flex-end;
+}
+
+.nova-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nova-avatar::after {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+}
+
+.msg-col {
+  display: flex;
+  flex-direction: column;
+  max-width: 280px;
+}
+
+.nova-row.tenant .msg-col {
+  align-items: flex-end;
 }
 
 .bubble {
-  max-width: 85%;
   padding: 10px 14px;
   border-radius: 16px;
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.bubble.tenant {
-  align-self: flex-end;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-bottom-right-radius: 4px;
+.bubble.nova {
+  background: #2c2c2c;
+  color: #fff;
+  border-top-left-radius: 0;
 }
 
-.bubble.nova {
-  align-self: flex-start;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-bottom-left-radius: 4px;
+.bubble.tenant {
+  background: #fff;
+  color: var(--ink);
+  border-top-right-radius: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.bubble.photo {
+  font-style: italic;
+}
+
+.msg-ts {
+  font-size: 12px;
+  color: #6b4e00; /* AA on #F5C518 (mock's #B8860B fails, DEC-26) */
+  margin: 4px 8px 0;
 }
 
 .working-note {
   align-self: flex-start;
   font-style: italic;
+  font-size: 13px;
+  color: #000;
   padding: 2px 4px;
 }
 
-.composer textarea {
-  min-height: 72px;
+/* Fixed-copy banners (escalation/redirect/capped) keep their own
+   backgrounds — readable on the yellow frame unchanged (INV-1 / DEC-24). */
+.nova-chat .banner,
+.nova-chat .error {
+  margin: 0;
+}
+
+.nova-footer {
+  flex: none;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nova-field {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #000;
+}
+
+.nova-field input {
+  margin-top: 4px;
+  border: none;
+  border-radius: 22px;
+  padding: 12px 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.nova-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.nova-composer textarea {
+  flex: 1;
+  margin: 0;
+  min-height: 44px;
+  max-height: 132px;
+  border: none;
+  border-radius: 22px;
+  padding: 11px 18px;
+  font-size: 14px;
+  resize: none;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.nova-composer textarea::placeholder,
+.nova-field input::placeholder {
+  color: #6b7280; /* AA on white (mock's gray-400 fails, DEC-26) */
+}
+
+.round-btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #374151;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.round-btn.send {
+  background: #000;
+  color: #fff;
+}
+
+.round-btn:disabled {
+  background: #fff;
+  color: #9ca3af; /* decorative icon on the disabled control, not text */
+  cursor: default;
+}
+
+.nova-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.nova-chips .chip {
+  background: #fff;
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }

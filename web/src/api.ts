@@ -88,10 +88,19 @@ export const api = {
     }),
   publicConversation: (statusSlug: string) =>
     request<PublicConversation>(`/public/status/${encodeURIComponent(statusSlug)}/messages`),
-  publicChatSend: (statusSlug: string, message: string) =>
+  publicChatSend: (statusSlug: string, message: string, photos: PublicPhoto[] = []) =>
     request<PublicChatReply>(`/public/status/${encodeURIComponent(statusSlug)}/messages`, {
       method: "POST",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, photos }),
+    }),
+  // BL-22: mid-chat photos — status-link presign, same caps as intake.
+  publicStatusPresign: (
+    statusSlug: string,
+    body: { filename: string; content_type: string; size_bytes: number },
+  ) =>
+    request<PublicPresignResponse>(`/public/status/${encodeURIComponent(statusSlug)}/presign`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 };
 

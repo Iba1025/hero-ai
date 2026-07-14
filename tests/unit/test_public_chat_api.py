@@ -394,6 +394,131 @@ async def test_chat_message_rate_limited_per_status_link(
     assert len(message_fakes["handled"]) == 2
 
 
+# ---- BL-22: mid-chat photos ----
+
+
+@pytest.fixture
+def photo_fakes(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Capture media rows + transcript rows appended by the photo path."""
+    calls: dict[str, Any] = {"media": [], "appended": []}
+
+    async def fake_create_media(session: Any, **kwargs: Any) -> Any:
+        calls["media"].append(kwargs)
+
+    async def fake_append(session: Any, **kwargs: Any) -> Any:
+        calls["appended"].append(kwargs)
+        return _row(sender=kwargs.get("sender", "tenant"), kind=kwargs.get("kind", "chat"))
+
+    def fake_presign(settings: Any, *, object_key: str, content_type: str, **kw: Any) -> str:
+        return f"https://r2.example/{object_key}"
+
+    monkeypatch.setattr(public_router, "create_media", fake_create_media)
+    monkeypatch.setattr(public_router, "append_conversation_message", fake_append)
+    monkeypatch.setattr(public_router, "presigned_upload_url", fake_presign)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_status_presign_unknown_slug_404(
+    client: httpx.AsyncClient, ticket_fakes: _FakeTicket, photo_fakes: dict[str, Any]
+) -> None:
+    resp = await client.post(
+        "/public/status/wrong-slug/presign",
+        json={"filename": "leak.jpg", "content_type": "image/jpeg", "size_bytes": 1024},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_status_presign_rejects_non_image(
+    client: httpx.AsyncClient, ticket_fakes: _FakeTicket, photo_fakes: dict[str, Any]
+) -> None:
+    resp = await client.post(
+        f"/public/status/{STATUS_SLUG}/presign",
+        json={"filename": "notes.pdf", "content_type": "application/pdf", "size_bytes": 100},
+    )
+    assert resp.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_status_presign_keys_under_tickets_building(
+    client: httpx.AsyncClient, ticket_fakes: _FakeTicket, photo_fakes: dict[str, Any]
+) -> None:
+    """Keys share the intake prefix + the ticket's building, so the message
+    endpoint's public-intake/ validation accepts them unchanged (INV-3)."""
+    resp = await client.post(
+        f"/public/status/{STATUS_SLUG}/presign",
+        json={"filename": "leak.jpg", "content_type": "image/jpeg", "size_bytes": 1024},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["object_key"].startswith(f"public-intake/{BUILDING_ID}/")
+    assert body["upload_url"].startswith("https://r2.example/")
+
+
+@pytest.mark.asyncio
+async def test_chat_message_with_photos_persists_media_and_photo_row(
+    client: httpx.AsyncClient,
+    ticket_fakes: _FakeTicket,
+    message_fakes: dict[str, Any],
+    photo_fakes: dict[str, Any],
+) -> None:
+    """BL-22: photos become media rows + one tenant kind=photo transcript row
+    BEFORE the text turn; the message still routes through the bridge."""
+    photos = [
+        {"object_key": f"public-intake/{BUILDING_ID}/x/a.jpg", "content_type": "image/jpeg"},
+        {"object_key": f"public-intake/{BUILDING_ID}/y/b.jpg", "content_type": "image/png"},
+    ]
+    resp = await client.post(
+        f"/public/status/{STATUS_SLUG}/messages",
+        json={"message": "here's what it looks like", "photos": photos},
+    )
+    assert resp.status_code == 200
+    assert [m["object_key"] for m in photo_fakes["media"]] == [p["object_key"] for p in photos]
+    assert len(photo_fakes["appended"]) == 1
+    row = photo_fakes["appended"][0]
+    assert row["sender"] == "tenant"
+    assert row["kind"] == "photo"
+    assert row["body"] == "2 photos attached"
+    assert message_fakes["handled"][0]["message"] == "here's what it looks like"
+
+
+@pytest.mark.asyncio
+async def test_chat_message_redirected_keeps_no_photos(
+    client: httpx.AsyncClient,
+    ticket_fakes: _FakeTicket,
+    message_fakes: dict[str, Any],
+    photo_fakes: dict[str, Any],
+) -> None:
+    """A redirected message (DEC-24) keeps nothing — no media, no photo row."""
+    photos = [{"object_key": f"public-intake/{BUILDING_ID}/x/a.jpg", "content_type": "image/jpeg"}]
+    resp = await client.post(
+        f"/public/status/{STATUS_SLUG}/messages",
+        json={"message": "can I withhold rent until this is fixed?", "photos": photos},
+    )
+    assert resp.status_code == 200
+    assert photo_fakes["media"] == []
+    assert photo_fakes["appended"] == []
+
+
+@pytest.mark.asyncio
+async def test_chat_message_rejects_foreign_photo_key(
+    client: httpx.AsyncClient,
+    ticket_fakes: _FakeTicket,
+    message_fakes: dict[str, Any],
+    photo_fakes: dict[str, Any],
+) -> None:
+    resp = await client.post(
+        f"/public/status/{STATUS_SLUG}/messages",
+        json={
+            "message": "photo attached",
+            "photos": [{"object_key": "somewhere/else.jpg", "content_type": "image/jpeg"}],
+        },
+    )
+    assert resp.status_code == 422
+    assert photo_fakes["media"] == []
+
+
 @pytest.mark.asyncio
 async def test_chat_message_pending_question_passed_when_clarifying(
     client: httpx.AsyncClient,
