@@ -40,3 +40,9 @@ htmlcov/
 
 # web SPA
 node_modules/
+
+# manual corpus — real manufacturer PDFs never enter git history
+data/manuals/
+
+# design reference bundles — visual reference only, never build them here
+design/**/node_modules/
