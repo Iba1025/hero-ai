@@ -351,7 +351,7 @@ transcripts all flow into prompts for agents that drive **real-world physical ac
 Suite per agent surface: intake agent · operator copilot · coordinator agent. Natural companion to
 BL-30's hazard red team.
 
-### 9.3 Closed-vocabulary extraction (into BL-18)
+### 9.3 Closed-vocabulary extraction (into BL-80)
 
 - **Closed enum** of fact types — open vocabularies make eval and filtering impossible
 - **Only what was actually stated.** *"Do not infer a goal from a job title"* → **Hero: do not infer a
@@ -363,7 +363,7 @@ BL-30's hazard red team.
 
 That last rule is what makes extracted context usable as flywheel data rather than prose.
 
-### 9.4 Prompt-assembly hygiene (into BL-18, BL-24)
+### 9.4 Prompt-assembly hygiene (into BL-80, BL-24)
 
 - **Annotate only when the annotation is real.** Channel or modality tags appear only when the window
   actually spans channels or modalities — otherwise the model learns to emit the scaffolding in its

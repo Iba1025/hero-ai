@@ -929,8 +929,9 @@ to their bid file. Generate a proper document, not just a web page.
 > items that collided were reissued at the end of the range:
 > Compliance vault BL-17 → **BL-73** · Scope Report BL-19 → **BL-74** · Job graph BL-20 → **BL-75** ·
 > Provider registry BL-21 → **BL-76** · Autonomy ladder BL-22 → **BL-77** · Invoice-as-diff
-> BL-23 → **BL-78** · CI-driven deploys (ex-BL-24, never committed) → **BL-79**. Operator Copilot
-> keeps **BL-24** (the old BL-24 allocation was never committed).
+> BL-23 → **BL-78** · Structured interview at INTAKE (v8 draft's BL-18) → **BL-80** · CI-driven
+> deploys (ex-BL-24, never committed) → **BL-79**. Operator Copilot keeps **BL-24** (the old
+> BL-24 allocation was never committed).
 > Commits dated before 2026-07-27 citing BL-13..24 always mean the old (v4/Phase-5) items.
 > ⚠️ The companion specs, HANDOFF.md, and WORK_ORDER_v8.2.md still cite the pre-reconciliation
 > numbers (BL-19/20/21/22/23) for the moved items — read them through this mapping until updated.
@@ -953,7 +954,7 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-49** | ✅ 2026-07-29 (current surfaces): **INV-18 injection suites** — `tests/unit/test_injection_nova.py` (instruction-override → fixed-copy redirect, never allow; hazard keyword outranks injection framing; replies never echo attacker text) + `tests/unit/test_injection_prompt_rendering.py` (retrieved/inbound text renders verbatim and inert — token lookalikes never re-expanded, template scaffolding intact; keyword floor + DEC-21 override beat injected downgrades even when the VLM parrots them). Grows one suite per new agent surface (copilot, coordinator, capture session) in that surface's PR | ~3 days | Cheap; hardens surfaces about to be built |
 | **BL-75** | Job graph + `_JobResumeGuard` + `job_event` ledger | ~2 wk | Structural prerequisite for the coordination plane |
 | **BL-41** | On-site confirm/correct + three-way visit fork + `CONFIRMED_SCOPE` | ~2 wk | **Label velocity starts here** |
-| **BL-3** | Eval pipeline, CI-gated, split by trade and `doc_class` (partially landed: golden-ticket eval + `--runs N`, `evals/run_eval.py`; not yet split by trade/`doc_class`) | ~1 wk | Prereq for BL-5/9/74/27 |
+| **BL-3** | ⚠️ partial — Eval pipeline: golden-ticket eval with `--runs N` ✅ (`evals/run_eval.py`). **Remaining: not CI-gated, not split by trade/`doc_class`** (the split feeds §1.1's band-distribution finding); `run_nova_eval.py` lacks `--runs` (DEC-20 gap) | ~1 wk | Prereq for BL-5/9/74/27 |
 | **BL-43** | Insert-flags + atomic join-or-open audit | ~3 days | Do before dispatch notify and invoice exist |
 | **BL-71** | Twilio transit config: redaction, recording off, media → R2, residency record | ~1 wk | Prerequisite for any SMS or voice channel |
 | **BL-69** | `price_band` with k≥5 floor + decay | ~1 wk | Contractor-facing benchmark. Blocked on BL-66 |
@@ -984,7 +985,7 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-32** | Scope Report as a Twenty front component | ~1 wk | Coordinator's daily surface |
 | **BL-55** | Site template (productized, Hero-hosted) | ~2 wk | Setup-fee offering; design work doesn't compete with engineering |
 | **BL-39** | Prompt-level language tests for INV-16 | days | Visit vs repair |
-| **BL-5** | Embedder bake-off | ~1 wk | Quality and/or ~28× cost |
+| **BL-5** | ⚠️ partial — Embedder bake-off: adapters ✅ (`colmodernvbert`; Bedrock lean mode per DEC-29). **Remaining: the bake-off itself never ran — DEC-2 is an open question, not a settled decision** | ~1 wk | Quality and/or ~28× cost |
 | **BL-78** | Invoice-as-diff + passive cost capture | ~2 wk | Variance is a label |
 | **BL-12** | Int8 quantization + on-disk Qdrant index | days | ~4× storage cut |
 | **BL-24** | Operator Copilot (voice, offline-first), CA-resident only | ~4 wk | Blocked on residency |
@@ -992,8 +993,9 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-11** | Deterministic procurement compatibility filters | | Partly blocked on OPEN-1 |
 | **BL-25** | Coordinator Agent (outbound) with INV-13 guardrails | ~4 wk | Highest legal exposure; last |
 | **BL-13** | *(legacy v4 ID, restored)* Per-contractor ticket assignment (DEC-22): `contractor_id` on ticket, assignment action in operator UI, contractor list filtered to assigned tickets | days | Pilot is org-scoped visibility; needed once orgs run multiple crews |
-| **BL-15** | *(legacy v4 ID, restored; item (2) ✅ 2026-07-13 Postgres rate limiting)* Remaining: R2 presigned PUTs get a server-enforced body-size condition — declared `content_length` is advisory today | days | Single-worker pilot is safe; bites when a hostile client PUTs oversized bodies |
+| **BL-15** | ⚠️ partial *(legacy v4 ID, restored)* — Postgres rate limiting ✅ 2026-07-13. **Remaining:** R2 presigned PUTs get a server-enforced body-size condition — declared `content_length` is advisory today | days | Single-worker pilot is safe; bites when a hostile client PUTs oversized bodies |
 | **BL-23** | *(legacy v4 ID, restored)* Mid-run evidence injection: photos/messages arriving while a run is in flight feed DIAGNOSE as new evidence. Touches the single-resume-path rule — needs its own design pass before any code | 1–2 w | Do NOT bolt onto the resume path ad hoc. Until then mid-chat photos land in media + transcript only (BL-22, §6.1) |
+| **BL-80** | Structured interview at INTAKE + interview/CLARIFY separation (DEC-31; Intake Spec §4 protocol on the existing text intake). Reissued from the v8 draft's colliding BL-18 — old BL-18 is ✅ §6.1 | ~2 wk | The interview is the evidence-quality lever; cited by Delivery Spec §9.3/9.4 |
 | **BL-79** | CI-driven deploys (DEC-27): replace the pilot's script + `compose up -d` with a CI pipeline (build → invariant tests against the containerized stack → push image → deploy). Pilot deploys stay manual and inspectable by decision | days | Post-pilot; reissued from uncommitted ex-BL-24 |
 | **BL-33** | ⏸ Realtime video mode | deferred | CA-resident realtime + unit economics |
 | **BL-34** | ⏸ Technician-side capture (phone → wearable, Mann) | deferred | After the professional-user path is proven |
@@ -1002,7 +1004,7 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-7** | ⏸ Region-level evidence grounding | deferred | Post-traction audit upgrade |
 | **BL-8** | ⏸ DuckDB/Parquet analytics split | deferred | `job_event` + video trigger this first |
 | **BL-14** | ⏸ *(legacy v4 ID)* Per-node timestamps in the ledger (node-level instrumentation feeding `ticket_event`) | deferred | Audit-artifact nicety; ledger events share the run-completion timestamp, ordered by `seq` |
-| **BL-16** | ⏸ *(legacy v4 ID)* Nova voice mode (DEC-25): STT/TTS with its own PIPEDA/residency review | deferred | Largely superseded by the v8 voice items (BL-24/25/36/72) — founder to fold or close |
+| **BL-16** | ⛔ closed 2026-07-29 *(legacy v4 ID)* — Nova voice mode: **superseded by BL-24 (Operator Copilot) and BL-36 (voice+video session)** | closed | Closed with reason, kept as history; never reuse |
 
 ### 6.1 Completed (IDs preserved — load-bearing history; never reuse)
 
