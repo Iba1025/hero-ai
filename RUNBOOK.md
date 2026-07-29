@@ -21,16 +21,17 @@ deploy/push.sh root@<ip>
 
 # 2. once per box: generate the server env (refuses to overwrite; rotation is §5)
 #    ⚠️ requires in the LOCAL .env: R2_*, ANTHROPIC_API_KEY, OPENAI_API_KEY,
-#    AWS_BEARER_TOKEN_BEDROCK (Bedrock lean mode), ACME_EMAIL (HTTPS flip only)
+#    CLOUDFLARE_API_TOKEN (Workers AI lean mode, DEC-87 — the R2 S3 keys
+#    cannot call Workers AI), ACME_EMAIL (HTTPS flip only, may be empty)
 deploy/make_server_env.sh root@<ip> http://<ip>
 
-# 3. build + start          ⏳ not yet run
+# 3. build + start          ✅ 2026-07-29
 ssh root@<ip> 'cd /opt/hero && docker compose --env-file .env.production up -d --build'
 
-# 4. migrate                ⏳ not yet run
+# 4. migrate                ✅ 2026-07-29 (0001→0009 clean)
 ssh root@<ip> 'cd /opt/hero && docker compose --env-file .env.production run --rm api alembic upgrade head'
 
-# 5. ingest the corpus      ⏳ not yet run   (manuals live in /opt/hero/data/manuals — staged)
+# 5. ingest the corpus      ✅ 2026-07-29 (9 pts)   (manuals live in /opt/hero/data/manuals)
 ssh root@<ip> 'cd /opt/hero && for m in \
   "test-manual:test_plumbing_manual.pdf:PL-2000" \
   "test-hvac-manual:test_hvac_manual.pdf:AC-3000" \
@@ -38,9 +39,13 @@ ssh root@<ip> 'cd /opt/hero && for m in \
   IFS=: read -r id pdf code <<<"$m"; \
   docker compose --env-file .env.production run --rm api \
     python -m hero.ingestion ingest /manuals/$pdf --doc-id $id \
-    --manufacturer ACME --model-codes $code --embedder bedrock_cohere; done'
+    --manufacturer ACME --model-codes $code --embedder cloudflare; done'
 
-# 6. smoke                  ⏳ not yet run
+# 6. smoke                  ✅ 2026-07-29 — plumbing ticket diagnosed e2e through
+#    Caddy (triage→retrieve 5 reranked citations→diagnose→verify→safety_gate→
+#    procure, 10 ledger entries); gas-smell opener escalated immediately.
+#    Seed first: `python -m hero.auth seed` + `python -m hero.buildings create`
+#    (both in the api container; --base-url BEFORE the subcommand).
 curl -fsS http://<ip>/health
 # then: submit a chat ticket end-to-end through Caddy over http://<ip> and confirm it
 # produces a diagnosis, hits the safety gate correctly, and writes a ledger entry.
@@ -64,6 +69,16 @@ and that refusal is load-bearing.
   If retrieval quality craters silently, run the canary before anything else.
 - **The dev Mac's rsync is openrsync** — `deploy/push.sh` must stay `--stats`-only
   (no `--info=`), or pushes fail with a usage error.
+- **Cloudflare token "Client IP Address Filtering" 401s from the droplet only** — token
+  verifies fine, every account-scoped call fails with error 10000. Symptom looks like a bad
+  token; it's an IP allow-list minted from the dev Mac. Remove the filter or add the box IP.
+- **Compose sets empty-but-SET env vars** (`ACME_EMAIL: ${ACME_EMAIL:-}`), which defeats
+  Caddyfile `{$VAR:fallback}` defaults — a bare directive crash-loops caddy. The Caddyfile
+  carries no `email` block until the HTTPS flip for exactly this reason.
+- **Caddy `path /tickets/*` does NOT match bare `/tickets`** — collection GETs fell through
+  to the SPA and returned index.html. The @api matcher lists bare prefixes too.
+- **`evals/` is not in the api image** — mount it for on-box eval runs:
+  `docker compose --env-file .env.production run --rm -v /opt/hero/evals:/app/evals api python evals/run_eval.py --runs 3 --live`
 
 ## 3. Backups + restore drill (Phase 6 STEP 3) ⏳ NOT YET IMPLEMENTED
 

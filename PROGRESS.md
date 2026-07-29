@@ -29,11 +29,11 @@ Phases 0–1 are where the action is; 2–4 are sequenced behind the deploy gate
 |---|---|---|---|
 | 0.1 | Commit staged deploy artifacts (compose, docker/, deploy/, CI workflow, lean-mode adapters) | ✅ 2026-07-29 | PR #5 — was uncommitted for 15 days |
 | 0.2 | Push tree to droplet + stage fixture manuals + pre-build images | ✅ 2026-07-29 | `push.sh` fixed for macOS openrsync (PR #6); hero-api 1.03GB + hero-caddy built on box |
-| 0.3 | Server env (`make_server_env.sh`) | ⛔ **CLOUDFLARE_API_TOKEN (Workers AI permission) missing from dev-Mac `.env`** | Pivoted to Workers AI (founder decision 2026-07-30 — recorded INV-2 exception, **DEC number pending from founder**; adapters/config/deploy wiring shipped). Resume: `deploy/make_server_env.sh root@134.122.44.90 http://134.122.44.90` |
-| 0.4 | `compose up -d --build` + `alembic upgrade head` on box | ⏳ | RUNBOOK §1 steps 3–4 |
-| 0.5 | Corpus ingestion with `--embedder cloudflare` | ⏳ | CLI wired; manuals staged at `/opt/hero/data/manuals` |
-| 0.6 | **The gate: e2e chat ticket through Caddy over `http://IP`** — diagnosis + safety gate + ledger row | ⏳ | Off-corpus tickets correctly escalate `diagnosis_unparseable` |
-| 0.7 | DEC-29 eval gate: `run_eval.py --runs 3 --live` vs committed self-hosted baseline | ⏳ | Baseline in `evals/results/baseline_selfhosted_2026-07-14.log`; material regression stops the deploy |
+| 0.3 | Server env (`make_server_env.sh`) | ✅ 2026-07-29 | Token landed (IP-filter gotcha — RUNBOOK §2); exception recorded as **DEC-87**. Script fixed: `get()` now tolerates missing keys under `set -e` |
+| 0.4 | `compose up -d --build` + `alembic upgrade head` on box | ✅ 2026-07-29 | 0001→0009 clean. Caddy crash-loop fix: no `email` directive (empty-but-set ACME_EMAIL) |
+| 0.5 | Corpus ingestion with `--embedder cloudflare` | ✅ 2026-07-29 | 3 manuals, 9 pts, via Workers AI bge-m3 |
+| 0.6 | **The gate: e2e chat ticket through Caddy over `http://IP`** — diagnosis + safety gate + ledger row | ✅ 2026-07-29 | Plumbing ticket: diagnosed, 5 reranked citations, verify pass, 10 ledger entries. Gas opener: escalated immediately. Caddyfile bare-path matcher fixed en route |
+| 0.7 | DEC-29 eval gate: `run_eval.py --runs 3 --live` vs committed self-hosted baseline | ⚠️ **founder call** | 15/18 vs baseline 18/18 (`evals/results/lean_cloudflare_2026-07-29.log`). Retrieval hit@5 **1.00 = baseline** (the layer DEC-87 changed); 3 fails are verify-entailment variance (grounding 0.86–0.88 on 1/3 runs each, fail-safe escalations, one Anthropic Overloaded mid-verify). Avg grounding 0.98 vs 1.00; ECE post-fit 0.0001 |
 | 0.8 | Phase 6 STEP 3 ops floor: backups **with restore drill** · uptime check · RUNBOOK verified | ⚠️ | RUNBOOK drafted (⏳ markers inline); backups/uptime not implemented — nothing to back up until 0.4 |
 | 0.9 | HTTPS flip: domain + `ACME_EMAIL` + Caddyfile `SITE_ADDRESS` + R2 CORS + `AUTH_COOKIE_SECURE=true` | ⛔ domain (Inam) | After the loop; not a loop blocker |
 

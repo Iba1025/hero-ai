@@ -70,6 +70,28 @@ gate; INV-12 counts resume functions not endpoints; corrected eval commands).
   lands: `deploy/make_server_env.sh root@134.122.44.90 http://134.122.44.90`, then
   RUNBOOK §1 steps 3–6, then the DEC-29 eval gate (`run_eval.py --runs 3 --live` vs
   `evals/results/baseline_selfhosted_2026-07-14.log`).
+
+**2026-07-29 (later) — DEPLOYED. The droplet loop ran end to end:**
+
+- Token landed (gotcha: Cloudflare client-IP filtering made it 401 from the droplet only —
+  RUNBOOK §2), exception numbered **DEC-87** (PRD §12; all "pending DEC" refs updated).
+- RUNBOOK §1 steps 2–6 all ✅: env written (after a `set -e`/`get()` fix in
+  `make_server_env.sh`), stack up, migrations 0001→0009 clean, 9 fixture pts ingested via
+  Workers AI bge-m3. Two Caddy fixes en route: dropped the global `email` block
+  (empty-but-set ACME_EMAIL crash-looped caddy) and added bare prefixes to the @api matcher
+  (`/tickets/*` alone misses `GET /tickets`).
+- **Smoke ✅ both directions:** plumbing chat ticket through Caddy over http://IP —
+  triage→retrieve (5 reranked citations)→diagnose→verify pass→safety gate→procure, 10
+  ledger entries, `diagnosed` in the cockpit. Gas-smell opener escalated immediately
+  with no reply text. Seeded: `smoke@hero.local` operator + `SmokeTestBldg`.
+- **DEC-29 eval gate = founder call, not auto-pass:** 15/18 vs baseline 18/18.
+  Retrieval hit@5 **1.00, identical to baseline** — the layer DEC-87 swapped shows no
+  regression. The 3 fails are verify-entailment variance (grounding 0.86–0.88 on one of
+  three runs each; every flaky ticket passed its other two; one Anthropic `Overloaded`
+  mid-verify), and all failed *safe* — escalation, never a wrong answer out. Avg grounding
+  0.98 vs 1.00; descriptive 0.94; ECE post-fit 0.0001. Log:
+  `evals/results/lean_cloudflare_2026-07-29.log`.
+- Phase 6 STEP 3 still open: backups + restore drill, uptime check (RUNBOOK §3–4).
 - **GitHub ruleset gotcha:** "Protect main — CI required" wants contexts
   `lint`/`typecheck`/`test`/`invariants`/`evals`; only `invariants` exists as a workflow →
   every PR needs admin-merge until the others exist or the ruleset is trimmed.

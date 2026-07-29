@@ -10,7 +10,7 @@
 
 | Service | Purpose | Region | Data crossing | Retention | Mitigation / decision | Reviewed |
 |---|---|---|---|---|---|---|
-| **Cloudflare Workers AI — `@cf/baai/bge-m3`** | Ingestion + query embedding (lean mode) | **Global — NO Canadian residency commitment** | Manual page text, query text | Cloudflare states inputs/outputs are not used to train models | ⚠️ **RECORDED INV-2 EXCEPTION, not compliance** — founder-approved 2026-07-30, **pending its DEC number**. Pairs with DEC-28 (R2) in any procurement review. Migration target: Bedrock ca-central-1 (rows below). Trigger mirrors DEC-28: BEFORE any procurement/compliance review and BEFORE the first paying customer | 2026-07-30 |
+| **Cloudflare Workers AI — `@cf/baai/bge-m3`** | Ingestion + query embedding (lean mode) | **Global — NO Canadian residency commitment** | Manual page text, query text | Cloudflare states inputs/outputs are not used to train models | ⚠️ **RECORDED INV-2 EXCEPTION, not compliance** — founder-approved 2026-07-30, recorded as **DEC-87**. Pairs with DEC-28 (R2) in any procurement review. Migration target: Bedrock ca-central-1 (rows below). Trigger mirrors DEC-28: BEFORE any procurement/compliance review and BEFORE the first paying customer | 2026-07-30 |
 | **Cloudflare Workers AI — `@cf/baai/bge-reranker-base`** | Retrieval reranking (lean mode) | **Global — NO Canadian residency commitment** | Query + candidate chunk text | As above | ⚠️ Same recorded exception as above | 2026-07-30 |
 
 ## Migration target (INV-2-clean, adapters built and unused — no AWS credentials yet)

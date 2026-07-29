@@ -1,0 +1,569 @@
+ Container hero-postgres-1 Running 
+ Container hero-qdrant-1 Running 
+ Container hero-qdrant-1 Waiting 
+ Container hero-postgres-1 Waiting 
+ Container hero-qdrant-1 Healthy 
+ Container hero-postgres-1 Healthy 
+ Container hero-api-run-8f0a46328107 Creating 
+ Container hero-api-run-8f0a46328107 Created 
+/app/.venv/lib/python3.12/site-packages/langgraph/checkpoint/base/__init__.py:18: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.
+  from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+[CHECKPOINTER] AsyncPostgresSaver (postgres:5432/hero)
+[QDRANT] index integrity OK (version stamp + BM25 canary)
+[ADAPTERS] live (VLM=LiteLLMVLM primary=claude-fable-5 verify=claude-sonnet-4-6 fallback=gpt-4o triage=claude-sonnet-4-6 (verify), embedder=cloudflare, reranker=cloudflare, qdrant=http://qdrant:6333)
+
+======================================================================
+Hero.AI Eval — 6 golden tickets (mode=LIVE, runs=3)
+======================================================================
+
+----- run 1/3 -----
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[92m19:02:53 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-sonnet-4-6: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsGJWjmQyiH18ktoe1B"}
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 278, in post
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 234, in post
+    response.raise_for_status()
+  File "/app/.venv/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '529 ' for url 'https://api.anthropic.com/v1/messages'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/529
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsGJWjmQyiH18ktoe1B"}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 539, in exception_type
+    raise InternalServerError(
+litellm.exceptions.InternalServerError: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsGJWjmQyiH18ktoe1B"}
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-002
+  [CLARIFY] Resuming with answer: 'The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-002: HVAC system making strange noise. Not cooling prop...
+  trade=hvac urgency=urgent complexity=standard path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 4, 'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=29.208s cost=$0.1005
+    cost[primary/diagnose]: $0.0713 (1 calls, 1725/1080 tok, 14.40s)
+    cost[triage]: $0.0013 (1 calls, 421/21 tok, 3.82s)
+    cost[verify/entailment]: $0.0280 (7 calls, 8170/231 tok, 18.33s)
+    nodes: intake=0.02s triage=3.82s retrieve=1.22s clarify=0.01s diagnose=14.41s verify=9.65s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.01s
+
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-005
+  [CLARIFY] Resuming with answer: 'The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-005: The rooftop AC serving our floor has several probl...
+  trade=hvac urgency=urgent complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 4, 'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=28.960s cost=$0.1194
+    cost[primary/diagnose]: $0.0829 (1 calls, 1845/1288 tok, 17.96s)
+    cost[triage]: $0.0045 (1 calls, 1154/69 tok, 1.41s)
+    cost[verify/entailment]: $0.0320 (8 calls, 9349/264 tok, 19.92s)
+    nodes: intake=0.00s triage=1.42s retrieve=0.71s clarify=0.01s diagnose=17.97s verify=8.76s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+[PASS] EVAL-003: Strong gas smell near the furnace in the basement....
+  trade=gas urgency=emergency complexity=standard path=full escalated=True escalation_reason=hard_category
+  verify_pass=True work_order_id=False sku=False
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 3, 'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=18.480s cost=$0.0914
+    cost[primary/diagnose]: $0.0632 (1 calls, 1684/927 tok, 13.34s)
+    cost[triage]: $0.0043 (1 calls, 1108/68 tok, 1.65s)
+    cost[verify/entailment]: $0.0239 (6 calls, 6978/198 tok, 8.07s)
+    nodes: intake=0.01s triage=1.65s retrieve=0.63s diagnose=13.34s verify=2.82s safety_gate=0.01s
+
+[PASS] EVAL-004: Kitchen faucet dripping steadily from the spout. E...
+  trade=plumbing urgency=routine complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 5} meets_min=True
+  retrieval@5=1.0 latency=16.621s cost=$0.0845
+    cost[primary/diagnose]: $0.0555 (1 calls, 1632/783 tok, 11.91s)
+    cost[triage]: $0.0044 (1 calls, 1107/70 tok, 1.46s)
+    cost[verify/entailment]: $0.0194 (5 calls, 5654/165 tok, 6.42s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1482/50 tok, 1.54s)
+    nodes: intake=0.01s triage=1.47s retrieve_fast=1.55s diagnose=11.91s verify=1.64s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+[PASS] EVAL-001: Leaking pipe under the kitchen sink. Water pooling...
+  trade=plumbing urgency=urgent complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 5, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=23.456s cost=$0.1112
+    cost[primary/diagnose]: $0.0783 (1 calls, 1636/1239 tok, 17.31s)
+    cost[triage]: $0.0044 (1 calls, 1108/70 tok, 2.36s)
+    cost[verify/entailment]: $0.0233 (6 calls, 6771/198 tok, 7.51s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1483/50 tok, 1.37s)
+    nodes: intake=0.01s triage=2.36s retrieve_fast=1.38s diagnose=17.31s verify=2.35s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+  [CLARIFY] Graph interrupted (organic (P4-5 sufficiency)). pending_question='Which appliance or system is making the rattling sound — for example, the AC unit (indoor or outdoor), the furnace, the fridge, or something else?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-006
+  [CLARIFY] Resuming with answer: 'It turned out to be the pipe under the kitchen sink - the curved section drips and rattles whenever water runs.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-006: Something in our unit is broken and it keeps makin...
+  trade=other urgency=routine complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[organic]: 'Which appliance or system is making the rattling sound — for example, the AC unit (indoor or outdoor), the furnace, the fridge, or something else?'
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=24.420s cost=$0.0781
+    cost[primary/diagnose]: $0.0559 (1 calls, 1742/770 tok, 12.06s)
+    cost[triage]: $0.0044 (1 calls, 1113/68 tok, 3.53s)
+    cost[verify/entailment]: $0.0120 (3 calls, 3511/99 tok, 7.84s)
+    cost[verify/sufficiency]: $0.0058 (1 calls, 1519/84 tok, 2.13s)
+    nodes: intake=0.00s triage=3.53s retrieve=3.53s clarify=0.01s diagnose=12.06s verify=5.20s safety_gate=0.01s resolve=0.00s procure=0.00s outcome=0.02s
+
+----- run 2/3 -----
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-002
+  [CLARIFY] Resuming with answer: 'The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago.'
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[92m19:05:40 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-sonnet-4-6: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsU4XSdE5g2DsYB5Lvo"}
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 278, in post
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 234, in post
+    response.raise_for_status()
+  File "/app/.venv/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '529 ' for url 'https://api.anthropic.com/v1/messages'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/529
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsU4XSdE5g2DsYB5Lvo"}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 539, in exception_type
+    raise InternalServerError(
+litellm.exceptions.InternalServerError: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsU4XSdE5g2DsYB5Lvo"}
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[FAIL] EVAL-002: HVAC system making strange noise. Not cooling prop...
+  trade=hvac urgency=urgent complexity=standard path=full escalated=True escalation_reason=verification_failed
+  verify_pass=False work_order_id=False sku=False
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=0.8571428571428571 by_type={'descriptive': 0.75, 'part_number': 1.0} claims={'descriptive': 4, 'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=28.248s cost=$0.1067
+    cost[primary/diagnose]: $0.0771 (1 calls, 1725/1198 tok, 15.84s)
+    cost[triage]: $0.0043 (1 calls, 1101/69 tok, 1.36s)
+    cost[verify/entailment]: $0.0252 (7 calls, 7449/208 tok, 26.56s)
+    nodes: intake=0.00s triage=1.36s retrieve=1.13s clarify=0.01s diagnose=15.84s verify=9.82s safety_gate=0.01s
+  FAILED checks: {'urgency_match': False, 'escalation_correct': False, 'organic_clarify': False, 'has_work_order': False, 'work_order_correct': False, 'has_sku': False, 'sku_correct': False}
+
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-005
+  [CLARIFY] Resuming with answer: 'The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-005: The rooftop AC serving our floor has several probl...
+  trade=hvac urgency=urgent complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 4, 'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=24.086s cost=$0.1185
+    cost[primary/diagnose]: $0.0819 (1 calls, 1845/1270 tok, 17.01s)
+    cost[triage]: $0.0045 (1 calls, 1154/69 tok, 3.13s)
+    cost[verify/entailment]: $0.0320 (8 calls, 9351/264 tok, 10.43s)
+    nodes: intake=0.00s triage=3.13s retrieve=1.05s clarify=0.01s diagnose=17.01s verify=2.81s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+[PASS] EVAL-003: Strong gas smell near the furnace in the basement....
+  trade=gas urgency=emergency complexity=standard path=full escalated=True escalation_reason=hard_category
+  verify_pass=True work_order_id=False sku=False
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 3, 'descriptive': 3} meets_min=True
+  retrieval@5=1.0 latency=23.975s cost=$0.0899
+    cost[primary/diagnose]: $0.0616 (1 calls, 1684/896 tok, 12.58s)
+    cost[triage]: $0.0043 (1 calls, 1108/68 tok, 1.92s)
+    cost[verify/entailment]: $0.0239 (6 calls, 6982/198 tok, 19.76s)
+    nodes: intake=0.01s triage=1.93s retrieve=0.85s diagnose=12.59s verify=8.56s safety_gate=0.01s
+
+[PASS] EVAL-004: Kitchen faucet dripping steadily from the spout. E...
+  trade=plumbing urgency=routine complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 2, 'descriptive': 2} meets_min=True
+  retrieval@5=1.0 latency=14.511s cost=$0.0758
+    cost[primary/diagnose]: $0.0507 (1 calls, 1632/688 tok, 10.11s)
+    cost[triage]: $0.0044 (1 calls, 1107/70 tok, 1.50s)
+    cost[verify/entailment]: $0.0155 (4 calls, 4495/132 tok, 4.76s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1482/50 tok, 1.58s)
+    nodes: intake=0.01s triage=1.50s retrieve_fast=1.59s diagnose=10.11s verify=1.24s safety_gate=0.01s resolve=0.00s procure=0.00s outcome=0.02s
+
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[92m19:07:05 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-sonnet-4-6: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsas3pooJpm797JzeFx"}
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 278, in post
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 234, in post
+    response.raise_for_status()
+  File "/app/.venv/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '529 ' for url 'https://api.anthropic.com/v1/messages'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/529
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsas3pooJpm797JzeFx"}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 539, in exception_type
+    raise InternalServerError(
+litellm.exceptions.InternalServerError: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsas3pooJpm797JzeFx"}
+[FAIL] EVAL-001: Leaking pipe under the kitchen sink. Water pooling...
+  trade=plumbing urgency=urgent complexity=simple path=fast escalated=True escalation_reason=verification_failed
+  verify_pass=False work_order_id=False sku=False
+  grounding_rate=0.8571428571428571 by_type={'part_number': 1.0, 'descriptive': 0.5} claims={'part_number': 5, 'descriptive': 2} meets_min=True
+  retrieval@5=1.0 latency=22.603s cost=$0.1085
+    cost[primary/diagnose]: $0.0747 (1 calls, 1636/1166 tok, 16.85s)
+    cost[triage]: $0.0044 (1 calls, 1108/70 tok, 1.55s)
+    cost[verify/entailment]: $0.0242 (7 calls, 7131/206 tok, 10.33s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1483/50 tok, 1.44s)
+    nodes: intake=0.00s triage=1.55s retrieve_fast=1.44s diagnose=16.85s verify=2.72s safety_gate=0.01s
+  FAILED checks: {'escalation_correct': False, 'routing_mismatch': False, 'organic_clarify': False, 'has_work_order': False, 'work_order_correct': False, 'has_sku': False, 'sku_correct': False}
+
+  [CLARIFY] Graph interrupted (organic (P4-5 sufficiency)). pending_question='Which appliance or system is making the rattling sound — for example, is it the outdoor AC unit, the furnace, the refrigerator, or something else?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-006
+  [CLARIFY] Resuming with answer: 'It turned out to be the pipe under the kitchen sink - the curved section drips and rattles whenever water runs.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-006: Something in our unit is broken and it keeps makin...
+  trade=other urgency=routine complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[organic]: 'Which appliance or system is making the rattling sound — for example, is it the outdoor AC unit, the furnace, the refrigerator, or something else?'
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=25.388s cost=$0.0744
+    cost[primary/diagnose]: $0.0522 (1 calls, 1742/696 tok, 11.10s)
+    cost[triage]: $0.0044 (1 calls, 1113/68 tok, 9.22s)
+    cost[verify/entailment]: $0.0120 (3 calls, 3501/99 tok, 4.96s)
+    cost[verify/sufficiency]: $0.0058 (1 calls, 1519/84 tok, 1.91s)
+    nodes: intake=0.01s triage=9.22s retrieve=2.67s clarify=0.01s diagnose=11.10s verify=2.30s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+----- run 3/3 -----
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-002
+  [CLARIFY] Resuming with answer: 'The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-002: HVAC system making strange noise. Not cooling prop...
+  trade=hvac urgency=urgent complexity=standard path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 4, 'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=20.167s cost=$0.1059
+    cost[primary/diagnose]: $0.0737 (1 calls, 1725/1128 tok, 14.05s)
+    cost[triage]: $0.0043 (1 calls, 1101/69 tok, 1.79s)
+    cost[verify/entailment]: $0.0279 (7 calls, 8158/231 tok, 10.27s)
+    nodes: intake=0.00s triage=1.79s retrieve=1.06s clarify=0.00s diagnose=14.05s verify=3.17s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-005
+  [CLARIFY] Resuming with answer: 'The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later.'
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[92m19:08:18 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-sonnet-4-6: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsgE9UBVkjR7EyTryqu"}
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 278, in post
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 234, in post
+    response.raise_for_status()
+  File "/app/.venv/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '529 ' for url 'https://api.anthropic.com/v1/messages'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/529
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsgE9UBVkjR7EyTryqu"}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 539, in exception_type
+    raise InternalServerError(
+litellm.exceptions.InternalServerError: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsgE9UBVkjR7EyTryqu"}
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[FAIL] EVAL-005: The rooftop AC serving our floor has several probl...
+  trade=hvac urgency=urgent complexity=complex path=full escalated=True escalation_reason=verification_failed
+  verify_pass=False work_order_id=False sku=False
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=0.875 by_type={'part_number': 0.8, 'descriptive': 1.0} claims={'part_number': 5, 'descriptive': 3} meets_min=True
+  retrieval@5=1.0 latency=33.139s cost=$0.1196
+    cost[primary/diagnose]: $0.0857 (1 calls, 1845/1346 tok, 20.07s)
+    cost[triage]: $0.0045 (1 calls, 1154/69 tok, 1.95s)
+    cost[verify/entailment]: $0.0293 (8 calls, 8658/243 tok, 20.82s)
+    nodes: intake=0.01s triage=1.95s retrieve=1.03s clarify=0.01s diagnose=20.07s verify=10.00s safety_gate=0.01s
+  FAILED checks: {'escalation_correct': False, 'routing_mismatch': False, 'organic_clarify': False, 'has_work_order': False, 'work_order_correct': False, 'has_sku': False, 'sku_correct': False}
+
+[PASS] EVAL-003: Strong gas smell near the furnace in the basement....
+  trade=gas urgency=emergency complexity=standard path=full escalated=True escalation_reason=hard_category
+  verify_pass=True work_order_id=False sku=False
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 3, 'descriptive': 3} meets_min=True
+  retrieval@5=1.0 latency=24.536s cost=$0.0925
+    cost[primary/diagnose]: $0.0642 (1 calls, 1684/947 tok, 13.20s)
+    cost[triage]: $0.0043 (1 calls, 1108/68 tok, 2.29s)
+    cost[verify/entailment]: $0.0239 (6 calls, 6984/198 tok, 14.81s)
+    nodes: intake=0.01s triage=2.29s retrieve=0.86s diagnose=13.20s verify=8.16s safety_gate=0.01s
+
+[PASS] EVAL-004: Kitchen faucet dripping steadily from the spout. E...
+  trade=plumbing urgency=routine complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=16.095s cost=$0.0769
+    cost[primary/diagnose]: $0.0518 (1 calls, 1632/710 tok, 9.75s)
+    cost[triage]: $0.0044 (1 calls, 1107/70 tok, 1.44s)
+    cost[verify/entailment]: $0.0155 (4 calls, 4508/132 tok, 5.71s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1482/50 tok, 2.82s)
+    nodes: intake=0.00s triage=1.44s retrieve_fast=2.82s diagnose=9.76s verify=2.00s safety_gate=0.01s resolve=0.00s procure=0.00s outcome=0.03s
+
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[92m19:09:09 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-sonnet-4-6: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsk1s9ujsmjvCuzNUe6"}
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 278, in post
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 234, in post
+    response.raise_for_status()
+  File "/app/.venv/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '529 ' for url 'https://api.anthropic.com/v1/messages'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/529
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsk1s9ujsmjvCuzNUe6"}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/app/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 539, in exception_type
+    raise InternalServerError(
+litellm.exceptions.InternalServerError: litellm.InternalServerError: AnthropicError - {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CdWsk1s9ujsmjvCuzNUe6"}
+[PASS] EVAL-001: Leaking pipe under the kitchen sink. Water pooling...
+  trade=plumbing urgency=urgent complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 6, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=23.327s cost=$0.1078
+    cost[primary/diagnose]: $0.0744 (1 calls, 1636/1160 tok, 16.22s)
+    cost[triage]: $0.0044 (1 calls, 1108/70 tok, 2.09s)
+    cost[verify/entailment]: $0.0271 (7 calls, 7887/231 tok, 9.66s)
+    cost[verify/sufficiency]: $0.0020 (1 calls, 738/11 tok, 1.75s)
+    nodes: intake=0.01s triage=2.09s retrieve_fast=1.76s diagnose=16.22s verify=3.20s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+  [CLARIFY] Graph interrupted (organic (P4-5 sufficiency)). pending_question='Which item in your unit is making the rattling sound — for example, the outdoor AC unit, the fridge, a vent, or something else?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-006
+  [CLARIFY] Resuming with answer: 'It turned out to be the pipe under the kitchen sink - the curved section drips and rattles whenever water runs.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-006: Something in our unit is broken and it keeps makin...
+  trade=other urgency=routine complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[organic]: 'Which item in your unit is making the rattling sound — for example, the outdoor AC unit, the fridge, a vent, or something else?'
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=28.002s cost=$0.0772
+    cost[primary/diagnose]: $0.0551 (1 calls, 1742/753 tok, 12.61s)
+    cost[triage]: $0.0044 (1 calls, 1113/68 tok, 10.18s)
+    cost[verify/entailment]: $0.0120 (3 calls, 3509/99 tok, 5.09s)
+    cost[verify/sufficiency]: $0.0058 (1 calls, 1519/81 tok, 2.21s)
+    nodes: intake=0.00s triage=10.18s retrieve=2.98s clarify=0.01s diagnose=12.61s verify=2.13s safety_gate=0.01s resolve=0.00s procure=0.00s outcome=0.02s
+
+======================================================================
+Results: 15/18 passed
+Avg latency: 23.623s
+Avg latency per node: intake=0.01s triage=2.93s retrieve=1.48s clarify=0.01s diagnose=14.25s verify=4.81s safety_gate=0.01s resolve=0.00s procure=0.00s outcome=0.02s retrieve_fast=1.76s
+Total run cost: $1.7386 (primary/diagnose=$1.2102 triage=$0.0758 verify/entailment=$0.4073 verify/sufficiency=$0.0453)
+Avg cost/ticket: $0.0966
+
+Path split (BL-4 — fast vs full):
+  fast: n=6 avg_latency=19.435s avg_cost=$0.0941 avg_retrieve_fast=1.76s
+  full: n=12 avg_latency=25.717s avg_cost=$0.0978 avg_retrieve=1.48s
+
+Sufficiency check (P4-5d — per-ticket tax on the full path):
+  n=9 tickets paid the check: avg calls=1.0 avg cost=$0.0050 avg latency=1.86s
+
+Routing stability (non-gating): 6/18 runs deviated from expected_complexity
+  EVAL-001: expected=simple got=simple/simple/simple
+  EVAL-002: expected=complex got=standard/standard/standard <-- MISMATCH
+  EVAL-003: expected=standard got=standard/standard/standard
+  EVAL-004: expected=simple got=simple/simple/simple
+  EVAL-005: expected=complex got=complex/complex/complex
+  EVAL-006: expected=standard got=complex/complex/complex <-- MISMATCH
+
+Spread over 3 runs (DEC-20 — mean/min/max):
+  EVAL-001: grounding 0.95/0.86/1.00  cost $0.1092/$0.1078/$0.1112
+  EVAL-002: grounding 0.95/0.86/1.00  cost $0.1044/$0.1005/$0.1067
+  EVAL-003: grounding 1.00/1.00/1.00  cost $0.0913/$0.0899/$0.0925
+  EVAL-004: grounding 1.00/1.00/1.00  cost $0.0790/$0.0758/$0.0845
+  EVAL-005: grounding 0.96/0.88/1.00  cost $0.1191/$0.1185/$0.1196
+  EVAL-006: grounding 1.00/1.00/1.00  cost $0.0766/$0.0744/$0.0781
+Avg grounding rate: 0.98
+Grounding rate [descriptive]: 0.94 over 13 tickets
+Grounding rate [part_number]: 0.99 over 18 tickets
+Retrieval hit-rate@5: 1.00 over 18 annotated tickets (retrieval=live)
+ECE (uncalibrated grounding rate): 0.1438 over 18 tickets
+ECE (PlattCalibrator post-fit):    0.0001
+======================================================================
+
+Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x7dbab82eea80>
+Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x7dbab6f958d0>, 1342602.194552938), (<aiohttp.client_proto.ResponseHandler object at 0x7dbab6f96eb0>, 1342602.756524771), (<aiohttp.client_proto.ResponseHandler object at 0x7dbab6f95470>, 1342603.118555926)])']
+connector: <aiohttp.connector.TCPConnector object at 0x7dbab82ee150>
+
