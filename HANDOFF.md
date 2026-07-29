@@ -53,11 +53,21 @@ gate; INV-12 counts resume functions not endpoints; corrected eval commands).
   `data/manuals/`, images pre-building. `RUNBOOK.md` drafted (⏳ markers = unverified).
   Ingestion CLI gained the missing `bedrock_cohere` embedder choice; `push.sh` fixed for
   macOS openrsync (`--info=stats1` → `--stats` — likely why no push ever happened).
-- **BLOCKED (humans):** the droplet loop needs `AWS_BEARER_TOKEN_BEDROCK` in the dev Mac's
-  `.env` — no AWS credentials exist on that machine, and lean-mode ingest/retrieve are
-  Bedrock-backed. `ACME_EMAIL` also absent (matters only at the HTTPS flip). Next command
-  once the key lands: `deploy/make_server_env.sh root@134.122.44.90 http://134.122.44.90`,
-  then RUNBOOK §1 steps 3–6, then the DEC-29 eval gate (`run_eval.py --runs 3 --live` vs
+- **2026-07-30 — lean-mode inference pivoted to Cloudflare Workers AI** (founder decision:
+  no AWS credentials available; reuse the Cloudflare account). ⚠️ This is a **recorded
+  INV-2 exception, not compliance** — Workers AI has no Canadian residency commitment for
+  ticket/manual text. **Founder still owes: (1) the DEC number for this exception**
+  (mirror DEC-28's shape: pilot-only, migration trigger = before procurement review /
+  first paying customer; Bedrock ca-central-1 adapters stay built as the migration
+  target), **and (2) a Cloudflare API token with Workers AI permission** in the dev Mac's
+  `.env` as `CLOUDFLARE_API_TOKEN` (R2 S3 keys cannot call Workers AI; account id derives
+  from R2_ENDPOINT). Adapters (`cloudflare_embedder`/`cloudflare_reranker`, bge-m3 +
+  bge-reranker-base — same model family as the BL-1 baseline), config, deps, ingestion
+  CLI, and deploy env script are all shipped and contract-tested.
+- **BLOCKED (humans):** `CLOUDFLARE_API_TOKEN` + the exception's DEC number (above).
+  `ACME_EMAIL` also absent (matters only at the HTTPS flip). Next command once the token
+  lands: `deploy/make_server_env.sh root@134.122.44.90 http://134.122.44.90`, then
+  RUNBOOK §1 steps 3–6, then the DEC-29 eval gate (`run_eval.py --runs 3 --live` vs
   `evals/results/baseline_selfhosted_2026-07-14.log`).
 - **GitHub ruleset gotcha:** "Protect main — CI required" wants contexts
   `lint`/`typecheck`/`test`/`invariants`/`evals`; only `invariants` exists as a workflow →

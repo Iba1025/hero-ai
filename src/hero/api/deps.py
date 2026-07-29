@@ -122,6 +122,13 @@ def make_embedder(settings: Settings) -> Any:
             region=settings.bedrock_region,
             api_key=settings.aws_bearer_token_bedrock,
         )
+    if settings.embedder_impl == "cloudflare":
+        from hero.adapters.cloudflare_embedder import CloudflareBgeEmbedder
+
+        return CloudflareBgeEmbedder(
+            account_id=settings.cloudflare_account_id,
+            api_token=settings.cloudflare_api_token,
+        )
     from hero.adapters.stub_embedder import StubEmbedder
 
     return StubEmbedder()
@@ -139,6 +146,13 @@ def make_reranker(settings: Settings) -> Any:
         return CohereReranker(
             region=settings.bedrock_region,
             api_key=settings.aws_bearer_token_bedrock,
+        )
+    if settings.reranker_impl == "cloudflare":
+        from hero.adapters.cloudflare_reranker import CloudflareBgeReranker
+
+        return CloudflareBgeReranker(
+            account_id=settings.cloudflare_account_id,
+            api_token=settings.cloudflare_api_token,
         )
     from hero.adapters.stub_reranker import StubReranker
 

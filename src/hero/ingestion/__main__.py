@@ -22,7 +22,9 @@ def main() -> int:
     ingest_p.add_argument("--manufacturer", required=True, help="Manufacturer name")
     ingest_p.add_argument("--model-codes", required=True, help="Comma-separated model codes")
     ingest_p.add_argument(
-        "--embedder", default="stub", choices=["stub", "colmodernvbert", "bedrock_cohere"]
+        "--embedder",
+        default="stub",
+        choices=["stub", "colmodernvbert", "bedrock_cohere", "cloudflare"],
     )
     ingest_p.add_argument("--qdrant-url", default=None, help="Qdrant URL (default: from config)")
     ingest_p.add_argument("--batch-size", type=int, default=4)
@@ -47,6 +49,16 @@ def main() -> int:
         resolved_embedder = BedrockCohereEmbedder(
             region=lean_settings.bedrock_region,
             api_key=lean_settings.aws_bearer_token_bedrock,
+        )
+    elif args.embedder == "cloudflare":
+        # Lean-mode Cloudflare variant (recorded INV-2 exception) — same
+        # construction as serving (deps.py).
+        from hero.adapters.cloudflare_embedder import CloudflareBgeEmbedder
+
+        cf_settings = get_settings()
+        resolved_embedder = CloudflareBgeEmbedder(
+            account_id=cf_settings.cloudflare_account_id,
+            api_token=cf_settings.cloudflare_api_token,
         )
     else:
         from hero.adapters.stub_embedder import StubEmbedder
