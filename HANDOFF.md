@@ -40,7 +40,8 @@ gate; INV-12 counts resume functions not endpoints; corrected eval commands).
   references to BL-19/20/21/22 (Scope Report / job graph / provider registry / autonomy ladder)
   should be read as **BL-74/75/76/77**.
 - **Eval baseline (2026-07-29):** 404 passed / 47 skipped, `mypy --strict` clean.
-  `run_eval.py` supports `--runs N` (DEC-20 ✓); `run_nova_eval.py` does not (gap, not a blocker).
+  `run_eval.py` supports `--runs N` (DEC-20 ✓); `run_nova_eval.py` gained it later the same day
+  (work-order amendment 3 gap closed).
 
 **Later on 2026-07-29 — five PRs merged to main, deploy started, then blocked:**
 

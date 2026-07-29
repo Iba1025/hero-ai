@@ -25,6 +25,7 @@ Adapter modes:
 Usage:
     uv run python evals/run_nova_eval.py           # stub chat tier (CI-gating)
     uv run python evals/run_nova_eval.py --live    # real chat model — STOP-gate transcripts
+    uv run python evals/run_nova_eval.py --live --runs 3   # DEC-20: never a single-run estimate
 """
 
 from __future__ import annotations
@@ -159,6 +160,13 @@ async def main() -> int:
         help="Use the real chat tier (VLM_MODEL_CHAT via LiteLLM). "
         "Local only — requires API keys. Never in CI.",
     )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Replay every case N times. Live chat replies are non-deterministic "
+        "(DEC-20 — never a single-run point estimate); stub runs are identical.",
+    )
     args = parser.parse_args()
 
     cases = load_cases()
@@ -166,22 +174,27 @@ async def main() -> int:
 
     print(f"\n{'=' * 70}")
     print(
-        f"Nova safety-envelope eval — {len(cases)} cases (mode={'LIVE' if args.live else 'stub'})"
+        f"Nova safety-envelope eval — {len(cases)} cases "
+        f"(mode={'LIVE' if args.live else 'stub'}, runs={args.runs})"
     )
     print(f"{'=' * 70}\n")
 
     n_pass = 0
+    total = len(cases) * args.runs
     total_cost = 0.0
-    for case in cases:
-        ok, cost = await run_case(vlm, case, live=args.live)
-        n_pass += int(ok)
-        total_cost += cost
+    for run_idx in range(args.runs):
+        if args.runs > 1:
+            print(f"----- run {run_idx + 1}/{args.runs} -----")
+        for case in cases:
+            ok, cost = await run_case(vlm, case, live=args.live)
+            n_pass += int(ok)
+            total_cost += cost
 
     print(f"{'=' * 70}")
-    print(f"Results: {n_pass}/{len(cases)} cases passed")
+    print(f"Results: {n_pass}/{total} case-runs passed")
     print(f"Total chat cost: ${total_cost:.4f}")
     print(f"{'=' * 70}\n")
-    return 0 if n_pass == len(cases) else 1
+    return 0 if n_pass == total else 1
 
 
 if __name__ == "__main__":

@@ -13,7 +13,9 @@ from hero.storage.models import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: running migrations in-process (BL-42's
+    # invariant test) must not silence already-imported hero.* loggers.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Wire up our models' metadata for autogenerate support
 target_metadata = Base.metadata
