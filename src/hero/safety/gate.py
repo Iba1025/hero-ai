@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from hero.safety.hazards import HARD_ESCALATE_TRADES, HAZARD_KEYWORDS
+from hero.safety.hazards import HARD_ESCALATE_TRADES, any_hazard
 
 
 @dataclass(frozen=True)
@@ -61,10 +61,14 @@ def clarify_allowed(*, trade: str | None, description: str) -> bool:
 
 
 def _any_hazard_keywords(description: str, hypotheses: list[dict[str, Any]]) -> bool:
-    """Scan description and hypothesis faults for hazard keywords."""
+    """Scan description and hypothesis faults for hazard signals (BL-81).
+
+    scan_hazards is a strict superset of the pre-BL-81 keyword list — this
+    change can only add escalations, never remove one (INV-15 monotonicity).
+    """
     text = description.lower()
     for hyp in hypotheses:
         fault = hyp.get("fault", "")
         text += " " + fault.lower()
 
-    return any(kw in text for kw in HAZARD_KEYWORDS)
+    return any_hazard(text)

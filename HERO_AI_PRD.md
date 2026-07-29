@@ -168,6 +168,11 @@ This is the artifact for a roll-up operator, because it is denominated in exactl
   Outranks the interview protocol, the 5-minute budget, the autonomy ladder, message coalescing, and
   any user instruction to continue. Deterministic pre-LLM classifier (`safety/live_hazards.py`),
   reviewed like code, mandatory red-team suite (BL-30).
+  **Amended 2026-07-29 (monotonicity): any detector may escalate; no detector may de-escalate.**
+  The deterministic scan is a floor, not a ceiling. Additional detectors — semantic, model-based,
+  or otherwise — may be layered above it and may only ever *raise* the hazard signal. This
+  preserves the intent of "deterministic pre-LLM" (never let a model's judgement be the *only*
+  gate) while permitting a recall layer above it.
   *Rationale: live video is the first surface where a person takes direction from the system while
   standing in front of a hazard.*
 - **INV-16 · No repair commitment before the gate.** A session may confirm a **diagnostic visit**
@@ -939,6 +944,7 @@ to their bid file. Generate a proper document, not just a web page.
 | ID | Item | Effort | Why |
 |---|---|---|---|
 | **BL-0** | `OUTCOME` label capture: near-zero-friction confirm/correct; velocity tracked | ongoing | The moat |
+| **BL-81** | ✅ 2026-07-29: **Hazard phrase coverage + recall instrumentation** — `safety/hazards.py` rewritten as per-category patterns (`scan_hazards`): inversions, colloquialisms, sensory-not-substance ("rotten eggs"/"sulfur" for mercaptan), misspellings, panicked fragments; strict superset of the legacy keyword list, wired into both consumers (Nova guardrail + safety gate). Adversarial corpus `evals/hazard_redteam_cases.py` (96 must-catch, 8 categories) — **the pattern list is an output of the suite, not an input**. Recall asserted at 100%/category (`tests/invariants/test_inv15_hazard_recall.py`); report via `evals/run_hazard_recall.py`. INV-15 amended with the monotonicity rule | ~2 days | INV-15's canonical example ("wait I smell gas") missed the old keyword scan — a hand-curated list never converges by inspection. Class A-safe: more escalations only, no new failure path |
 | **BL-42** | ✅ 2026-07-29: **Grant-hygiene invariant tests** — `tests/invariants/test_grant_hygiene.py` runs the real alembic chain into a scratch DB, then asserts: no function grants EXECUTE to PUBLIC, every function pins `search_path`, and `job_event`/`live_hazard_event`/`dead_letter` (enforced-if-present) revoke UPDATE/DELETE/TRUNCATE with nothing granted to PUBLIC. Plus `test_inv12_single_resume.py`: AST allowlist asserting exactly one `Command(resume=…)` call site per graph (founder Q4 ruling) | ~1 day | Closes the class of bug that silently voids §14's append-only enforcement; a future migration that forgets fails CI |
 | **BL-73** | Compliance vault + packet automation | ~1 wk | 5 min vs 15 days; converts a design partner into a live network |
 | **BL-47** | **`party_identifier` + normalization + race-safe creation** | ~1 wk | **Migration 1.** Without it the registry fragments and `provider_metric` accumulates against ghosts |

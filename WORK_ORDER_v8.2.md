@@ -331,3 +331,12 @@ Then wait.
 4. **§3.1/§4 backlog IDs:** this document cites pre-reconciliation numbers for the moved items —
    Scope Report BL-19→BL-74, Job graph BL-20→BL-75, Provider registry BL-21→BL-76, Autonomy ladder
    BL-22→BL-77, Invoice-as-diff BL-23→BL-78. See PRD §6's renumbering note.
+5. **Class A-safe (added category): changes behaviour only in the direction of more caution, with
+   no new failure path** — no boot risk, no new exception path, fail-safe direction. Hazard phrase
+   additions qualify (BL-81); they ship immediately and do not queue behind Class B. The original
+   Class A/B question was mis-specified as "does it change behaviour" — the real question is
+   *could it make the deploy loop harder to debug*.
+6. **The append-only role split moves into the Phase 2 schema bundle.** Grants only bind if the
+   runtime role is not the table owner; BL-42's suite enforces the grants half, and the migration
+   that creates `job_event`/`live_hazard_event`/`dead_letter` must introduce the non-owner service
+   role in the same bundle — otherwise §14's append-only claim stays unverified indefinitely.
