@@ -42,6 +42,27 @@ gate; INV-12 counts resume functions not endpoints; corrected eval commands).
 - **Eval baseline (2026-07-29):** 404 passed / 47 skipped, `mypy --strict` clean.
   `run_eval.py` supports `--runs N` (DEC-20 ✓); `run_nova_eval.py` does not (gap, not a blocker).
 
+**Later on 2026-07-29 — five PRs merged to main, deploy started, then blocked:**
+
+- Merged: #1 v8.2 docs + Q&A amendments · #2 (via #3) backlog reconciliation incl. BL-80 ·
+  #3 Class A hardening (BL-42 ✅, BL-49 ✅, INV-12 test, `docs/residency.md`) ·
+  **#4 BL-81 hazard coverage ✅** (per-category `scan_hazards`, 96-phrase red-team corpus,
+  100% recall asserted, INV-15 monotonicity amendment) · #5 the staged deploy artifacts
+  (finally committed after 15 days). Suite: **768 passed**, `mypy --strict` clean.
+- **Deploy state:** repo rsynced to `/opt/hero` on the droplet, fixture manuals staged at
+  `data/manuals/`, images pre-building. `RUNBOOK.md` drafted (⏳ markers = unverified).
+  Ingestion CLI gained the missing `bedrock_cohere` embedder choice; `push.sh` fixed for
+  macOS openrsync (`--info=stats1` → `--stats` — likely why no push ever happened).
+- **BLOCKED (humans):** the droplet loop needs `AWS_BEARER_TOKEN_BEDROCK` in the dev Mac's
+  `.env` — no AWS credentials exist on that machine, and lean-mode ingest/retrieve are
+  Bedrock-backed. `ACME_EMAIL` also absent (matters only at the HTTPS flip). Next command
+  once the key lands: `deploy/make_server_env.sh root@134.122.44.90 http://134.122.44.90`,
+  then RUNBOOK §1 steps 3–6, then the DEC-29 eval gate (`run_eval.py --runs 3 --live` vs
+  `evals/results/baseline_selfhosted_2026-07-14.log`).
+- **GitHub ruleset gotcha:** "Protect main — CI required" wants contexts
+  `lint`/`typecheck`/`test`/`invariants`/`evals`; only `invariants` exists as a workflow →
+  every PR needs admin-merge until the others exist or the ruleset is trimmed.
+
 ---
 
 ## ⛔ Do not start (guard — read before picking up any backlog item)
