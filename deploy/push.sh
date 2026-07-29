@@ -8,7 +8,9 @@ HOST="${1:?usage: deploy/push.sh root@<ip>}"
 
 # Excluded-but-protected (--delete does not touch excluded paths): the
 # server's .env.production and data/manuals survive every push.
-rsync -az --delete --info=stats1 \
+# --stats, not --info=stats1: macOS ships openrsync, which lacks --info
+# (this is why the first push never happened from the dev Mac).
+rsync -az --delete --stats \
     --exclude .git \
     --exclude .venv \
     --exclude node_modules \

@@ -21,7 +21,9 @@ def main() -> int:
     ingest_p.add_argument("--doc-id", help="Document ID (default: filename)")
     ingest_p.add_argument("--manufacturer", required=True, help="Manufacturer name")
     ingest_p.add_argument("--model-codes", required=True, help="Comma-separated model codes")
-    ingest_p.add_argument("--embedder", default="stub", choices=["stub", "colmodernvbert"])
+    ingest_p.add_argument(
+        "--embedder", default="stub", choices=["stub", "colmodernvbert", "bedrock_cohere"]
+    )
     ingest_p.add_argument("--qdrant-url", default=None, help="Qdrant URL (default: from config)")
     ingest_p.add_argument("--batch-size", type=int, default=4)
 
@@ -36,6 +38,16 @@ def main() -> int:
         from hero.adapters.colmodernvbert import ColModernVBertEmbedder
 
         resolved_embedder = ColModernVBertEmbedder()
+    elif args.embedder == "bedrock_cohere":
+        # Lean mode (DEC-29): same construction as serving (deps.py), so the
+        # ingested vectors and query vectors come from the identical model.
+        from hero.adapters.bedrock_embedder import BedrockCohereEmbedder
+
+        lean_settings = get_settings()
+        resolved_embedder = BedrockCohereEmbedder(
+            region=lean_settings.bedrock_region,
+            api_key=lean_settings.aws_bearer_token_bedrock,
+        )
     else:
         from hero.adapters.stub_embedder import StubEmbedder
 
