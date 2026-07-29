@@ -225,19 +225,25 @@ This is the artifact for a roll-up operator, because it is denominated in exactl
 
 ## 3. Runtime State Machines
 
-### 3.1 Ticket graph — unchanged since v4
+### 3.1 Ticket graph — the code is the frozen baseline (`src/hero/graph/build.py`)
 
 ```
-INTAKE → TRIAGE → RETRIEVE → [grade evidence ⟲ corrective re-retrieve, capped]
-       → [CLARIFY ⟲ back to RETRIEVE] → DIAGNOSE
-       → VERIFY → SAFETY_GATE → { ESCALATE (licensed trade) | RESOLVE → PROCURE → OUTCOME }
+INTAKE → TRIAGE ─┬─ RETRIEVE ✅ ────────────┬─→ [CLARIFY ⟲ back to full RETRIEVE] ✅
+                 └─ RETRIEVE_FAST ✅ (BL-4) ─┘         → DIAGNOSE
+       → VERIFY → SAFETY_GATE → { escalated → END | RESOLVE → PROCURE → OUTCOME }   all ✅
+
+[SPEC] planned, NOT built: [grade evidence ⟲ corrective re-retrieve, capped] (BL-9)
 ```
+
+✅ = built and frozen · [SPEC] = planned. Escalation is a terminal edge off `SAFETY_GATE`, not a
+node. **Where this diagram and the code disagree, the code is the baseline and the diagram is a
+defect to report — never a change to implement** (founder ruling, 2026-07-29).
 
 | State | Responsibility | Notes |
 |---|---|---|
 | `INTAKE` | Ticket + evidence ingestion | Presigned upload. Structured interview runs here, before TRIAGE. Video-session artifacts land identically to photos (INV-14). Sensor data optional (INV-7) |
 | `TRIAGE` | Urgency + trade + complexity | 🔄 Complexity routing (BL-4) |
-| `RETRIEVE` | Hybrid retrieval | 🔄 Reranker (BL-1); 🔄 corrective loop (BL-9). Corpus is per-trade (§4.1) |
+| `RETRIEVE` | Hybrid retrieval | ✅ Reranker (BL-1, §6.1); 🔄 corrective loop (BL-9, [SPEC]). Corpus is per-trade (§4.1) |
 | `CLARIFY` | HITL follow-up, loop to RETRIEVE | Distinct from the interview (DEC-31) |
 | `DIAGNOSE` | VLM forms hypotheses | Claude Sonnet primary, GPT-4o fallback, via LiteLLM |
 | `VERIFY` | Ground claims against evidence | 🔄 Claim-level (BL-6) |
@@ -914,13 +920,26 @@ to their bid file. Generate a proper document, not just a web page.
 
 ---
 
-## 6. Backlog (table order = priority; IDs stable; **BL-38 unallocated, do not reuse**)
+## 6. Backlog (table order = priority; IDs stable; **BL-38 unallocated and BL-64 withdrawn (DEC-79) — do not reuse either**)
+
+> **Renumbering note (2026-07-29).** PRD v5–v8 were drafted against v4's visible BL-0..12 and
+> unknowingly reissued IDs BL-13..24, which the repo had already allocated (commits and code cite
+> them). Resolution, per founder ruling: **committed IDs keep their original meanings** — completed
+> ones are in §6.1; still-open ones (BL-13, BL-15, BL-23) are restored to the table below. The v8
+> items that collided were reissued at the end of the range:
+> Compliance vault BL-17 → **BL-73** · Scope Report BL-19 → **BL-74** · Job graph BL-20 → **BL-75** ·
+> Provider registry BL-21 → **BL-76** · Autonomy ladder BL-22 → **BL-77** · Invoice-as-diff
+> BL-23 → **BL-78** · CI-driven deploys (ex-BL-24, never committed) → **BL-79**. Operator Copilot
+> keeps **BL-24** (the old BL-24 allocation was never committed).
+> Commits dated before 2026-07-27 citing BL-13..24 always mean the old (v4/Phase-5) items.
+> ⚠️ The companion specs, HANDOFF.md, and WORK_ORDER_v8.2.md still cite the pre-reconciliation
+> numbers (BL-19/20/21/22/23) for the moved items — read them through this mapping until updated.
 
 | ID | Item | Effort | Why |
 |---|---|---|---|
 | **BL-0** | `OUTCOME` label capture: near-zero-friction confirm/correct; velocity tracked | ongoing | The moat |
-| **BL-42** | **Grant-hygiene invariant tests** | ~1 day | One day; closes the class of bug that silently voids §14's append-only enforcement on the safety and dispute records |
-| **BL-17** | Compliance vault + packet automation | ~1 wk | 5 min vs 15 days; converts a design partner into a live network |
+| **BL-42** | ✅ 2026-07-29: **Grant-hygiene invariant tests** — `tests/invariants/test_grant_hygiene.py` runs the real alembic chain into a scratch DB, then asserts: no function grants EXECUTE to PUBLIC, every function pins `search_path`, and `job_event`/`live_hazard_event`/`dead_letter` (enforced-if-present) revoke UPDATE/DELETE/TRUNCATE with nothing granted to PUBLIC. Plus `test_inv12_single_resume.py`: AST allowlist asserting exactly one `Command(resume=…)` call site per graph (founder Q4 ruling) | ~1 day | Closes the class of bug that silently voids §14's append-only enforcement; a future migration that forgets fails CI |
+| **BL-73** | Compliance vault + packet automation | ~1 wk | 5 min vs 15 days; converts a design partner into a live network |
 | **BL-47** | **`party_identifier` + normalization + race-safe creation** | ~1 wk | **Migration 1.** Without it the registry fragments and `provider_metric` accumulates against ghosts |
 | **BL-35** | **Capacity model + `visit` + confirm loop + reminders** (on existing *text* intake) | ~2 wk | Validates the whole commercial premise in 2 weeks, no video/voice/residency dependency |
 | **BL-65** | **`task_taxonomy` + seed (HVAC, ~200 codes) + `task_alias`** | ~2 wk | **Nothing compounds without it.** Migration-1 shaped — the join key for catalogue, cases, pricing, matching |
@@ -928,19 +947,17 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-66** | `vendor_catalog_item` + import + price decay | ~1 wk | Solves the pricebook cold start; required for pricing posture |
 | **BL-67** | **Document ingestion pipeline** (invoices/quotes → line items → task codes, ColQwen reuse, review queue) | ~3 wk | The onboarding demo *and* day-one case backfill. Lowest-risk ask of a design partner |
 | **BL-68** | `case_record` + `case_narratives` vector collection + de-identification | ~2 wk | The compounding store. Blocked on BL-65 |
-| **BL-1** | Cross-encoder reranker, self-hosted | days | Highest-ROI retrieval change |
-| **BL-19** | Scope Report artifact (preliminary + confirmed) | ~2 wk | INV-9 made concrete |
-| **BL-2** | Platt/temperature calibration default | hours | **Gates BL-19's band** |
+| **BL-74** | Scope Report artifact (preliminary + confirmed) | ~2 wk | INV-9 made concrete |
 | **BL-37** | Preliminary report delivery: SMS + email + signed mobile page + CRM | ~2 wk | The tech reads it before the truck moves |
 | **BL-50** | INV-19 stop-reason allowlist in the LiteLLM adapter | ~1 day | One place; prevents silently narrowed conformal sets |
-| **BL-49** | INV-18 injection suites per agent surface | ~3 days | Cheap; hardens surfaces about to be built |
-| **BL-20** | Job graph + `_JobResumeGuard` + `job_event` ledger | ~2 wk | Structural prerequisite for the coordination plane |
+| **BL-49** | ✅ 2026-07-29 (current surfaces): **INV-18 injection suites** — `tests/unit/test_injection_nova.py` (instruction-override → fixed-copy redirect, never allow; hazard keyword outranks injection framing; replies never echo attacker text) + `tests/unit/test_injection_prompt_rendering.py` (retrieved/inbound text renders verbatim and inert — token lookalikes never re-expanded, template scaffolding intact; keyword floor + DEC-21 override beat injected downgrades even when the VLM parrots them). Grows one suite per new agent surface (copilot, coordinator, capture session) in that surface's PR | ~3 days | Cheap; hardens surfaces about to be built |
+| **BL-75** | Job graph + `_JobResumeGuard` + `job_event` ledger | ~2 wk | Structural prerequisite for the coordination plane |
 | **BL-41** | On-site confirm/correct + three-way visit fork + `CONFIRMED_SCOPE` | ~2 wk | **Label velocity starts here** |
-| **BL-3** | Eval pipeline, CI-gated, split by trade and `doc_class` | ~1 wk | Prereq for BL-5/9/19/27 |
+| **BL-3** | Eval pipeline, CI-gated, split by trade and `doc_class` (partially landed: golden-ticket eval + `--runs N`, `evals/run_eval.py`; not yet split by trade/`doc_class`) | ~1 wk | Prereq for BL-5/9/74/27 |
 | **BL-43** | Insert-flags + atomic join-or-open audit | ~3 days | Do before dispatch notify and invoice exist |
 | **BL-71** | Twilio transit config: redaction, recording off, media → R2, residency record | ~1 wk | Prerequisite for any SMS or voice channel |
 | **BL-69** | `price_band` with k≥5 floor + decay | ~1 wk | Contractor-facing benchmark. Blocked on BL-66 |
-| **BL-70** | Task → eligible-contractor resolution (registry + compliance + capacity join) | ~1 wk | Closes diagnosis → dispatch. Blocked on BL-21, BL-65 |
+| **BL-70** | Task → eligible-contractor resolution (registry + compliance + capacity join) | ~1 wk | Closes diagnosis → dispatch. Blocked on BL-76, BL-65 |
 | **BL-72** | Self-hosted ASR + templated-TTS constraint with enforcing tests | ~2 wk | Removes the larger half of the voice residency exposure |
 | **BL-53** | **Google Business Profile booking action** | ~1 wk | Cheapest distribution available; works for contractors who will never have a website |
 | **BL-40** | Pre-flight triage (standalone, deterministic-first) | ~1 wk | Gates the visit offer |
@@ -948,13 +965,12 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-45** | **INV-20 failure-rate monitors**, hazard classifier alerting | ~1 wk | Ship *with* BL-30 — an unmonitored safety classifier is a safety gap |
 | **BL-52** | Contractor profile page + native session mount | ~2 wk | Solves Tyler without a website |
 | **BL-56** | **`client_class` + `site` model + party roles (reporter/decider/payer)** | ~1 wk | Schema-shaped; the reporter≠decider split is what makes commercial work and it's cheap now |
-| **BL-4** | Complexity routing in TRIAGE | ~1 wk | Unit economics |
 | **BL-58** | **RFQ artifact + `REQUESTER_APPROVE` gate (INV-21) + delivery incl. PDF** | ~2 wk | The commercial terminal artifact; reuses the whole pipeline |
 | **BL-59** | Multi-asset tickets (*"RTU-3 and RTU-5"*, not *"the AC"*) | ~1 wk | Commercial faults are routinely multi-asset; residential rarely is |
 | **BL-60** | Site access constraints (after-hours, escort, dock, elevator) on the site record | ~3 days | Feeds both the RFQ and residential `MOBILISE` |
 | **BL-62** | **Modality selection + photo-mode parity** (DEC-75/76) | ~1 wk | Photo mode works on today's stack with no residency blocker — it is the *default*, not the fallback |
 | **BL-63** | **Assistant identity + policy capture at onboarding** (name, tone preset, fee, exclusions, service area) | ~1 wk | Cheap now that cloning is out (DEC-79). One onboarding call yields the registry entry *and* the assistant config |
-| **BL-21** | Provider registry + matching, conversational onboarding | ~3 wk | Version B core |
+| **BL-76** | Provider registry + matching, conversational onboarding | ~3 wk | Version B core |
 | **BL-51** | `conversation` + `conversation_message` + `getPartyTimeline` | ~1 wk | Interaction plane needs it; feeds BL-32 |
 | **BL-46** | Dead-letter hook + fail-closed config + three-valued liveness | ~1 wk | Wedged approvals are invisible today |
 | **BL-28** | **Nameplate → equipment identity + warranty** | ~2 wk | Closes four loops; highest-ROI in the video work |
@@ -964,24 +980,46 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-36** | **Synchronised voice + video session** | ~4 wk | Blocked on BL-28, BL-30, BL-40, residency |
 | **BL-31** | Twenty self-host + sync layer | ~3 wk | Blocked on deploy gate + capacity (DEC-50) |
 | **BL-48** | CRM reconcile sweep + idempotency-by-constraint | ~3 days | Part of BL-31's DoD |
-| **BL-22** | Autonomy ladder policy layer + edit-rate telemetry | ~2 wk | Blocked on Langfuse (DEC-30) |
+| **BL-77** | Autonomy ladder policy layer + edit-rate telemetry | ~2 wk | Blocked on Langfuse (DEC-30) |
 | **BL-32** | Scope Report as a Twenty front component | ~1 wk | Coordinator's daily surface |
 | **BL-55** | Site template (productized, Hero-hosted) | ~2 wk | Setup-fee offering; design work doesn't compete with engineering |
 | **BL-39** | Prompt-level language tests for INV-16 | days | Visit vs repair |
 | **BL-5** | Embedder bake-off | ~1 wk | Quality and/or ~28× cost |
-| **BL-23** | Invoice-as-diff + passive cost capture | ~2 wk | Variance is a label |
+| **BL-78** | Invoice-as-diff + passive cost capture | ~2 wk | Variance is a label |
 | **BL-12** | Int8 quantization + on-disk Qdrant index | days | ~4× storage cut |
-| **BL-6** | Claim-level VERIFY | | After BL-1 |
 | **BL-24** | Operator Copilot (voice, offline-first), CA-resident only | ~4 wk | Blocked on residency |
-| **BL-10** | Conformal prediction sets at SAFETY_GATE | 1–2 q | Feeds BL-19 band |
+| **BL-10** | Conformal prediction sets at SAFETY_GATE | 1–2 q | Feeds BL-74 band |
 | **BL-11** | Deterministic procurement compatibility filters | | Partly blocked on OPEN-1 |
 | **BL-25** | Coordinator Agent (outbound) with INV-13 guardrails | ~4 wk | Highest legal exposure; last |
+| **BL-13** | *(legacy v4 ID, restored)* Per-contractor ticket assignment (DEC-22): `contractor_id` on ticket, assignment action in operator UI, contractor list filtered to assigned tickets | days | Pilot is org-scoped visibility; needed once orgs run multiple crews |
+| **BL-15** | *(legacy v4 ID, restored; item (2) ✅ 2026-07-13 Postgres rate limiting)* Remaining: R2 presigned PUTs get a server-enforced body-size condition — declared `content_length` is advisory today | days | Single-worker pilot is safe; bites when a hostile client PUTs oversized bodies |
+| **BL-23** | *(legacy v4 ID, restored)* Mid-run evidence injection: photos/messages arriving while a run is in flight feed DIAGNOSE as new evidence. Touches the single-resume-path rule — needs its own design pass before any code | 1–2 w | Do NOT bolt onto the resume path ad hoc. Until then mid-chat photos land in media + transcript only (BL-22, §6.1) |
+| **BL-79** | CI-driven deploys (DEC-27): replace the pilot's script + `compose up -d` with a CI pipeline (build → invariant tests against the containerized stack → push image → deploy). Pilot deploys stay manual and inspectable by decision | days | Post-pilot; reissued from uncommitted ex-BL-24 |
 | **BL-33** | ⏸ Realtime video mode | deferred | CA-resident realtime + unit economics |
 | **BL-34** | ⏸ Technician-side capture (phone → wearable, Mann) | deferred | After the professional-user path is proven |
 | **BL-61** | ⏸ Structured bid collection + comparison portal | deferred | A month of work for a workflow we haven't watched anyone perform. Track responses as received first (DEC-74) |
 | **BL-26** | ⏸ Cross-network federation + portable performance | deferred | 3 networks + the §10.1 data clause |
 | **BL-7** | ⏸ Region-level evidence grounding | deferred | Post-traction audit upgrade |
 | **BL-8** | ⏸ DuckDB/Parquet analytics split | deferred | `job_event` + video trigger this first |
+| **BL-14** | ⏸ *(legacy v4 ID)* Per-node timestamps in the ledger (node-level instrumentation feeding `ticket_event`) | deferred | Audit-artifact nicety; ledger events share the run-completion timestamp, ordered by `seq` |
+| **BL-16** | ⏸ *(legacy v4 ID)* Nova voice mode (DEC-25): STT/TTS with its own PIPEDA/residency review | deferred | Largely superseded by the v8 voice items (BL-24/25/36/72) — founder to fold or close |
+
+### 6.1 Completed (IDs preserved — load-bearing history; never reuse)
+
+| ID | Delivered |
+|---|---|
+| **BL-1** | ✅ 2026-07 — BGE cross-encoder reranker (`adapters/bge_reranker.py`) wired into fusion; self-hosted default until DEC-29 lean mode selected Bedrock Cohere Rerank by config |
+| **BL-2** | ✅ 2026-07 — `PlattCalibrator` default + gated `IsotonicCalibrator` (`adapters/platt.py`); the `calibrated_confidence` source (INV-4) |
+| **BL-4** | ✅ 2026-07 — Complexity routing in TRIAGE: VLM triage (verify tier) with deterministic INV-1 fail-safes, fast/full path split (`graph/nodes/triage.py`, DEC-21) |
+| **BL-6** | ✅ 2026-07 — Claim-level VERIFY: real `EvidenceChunk.text` into entailment, per-type thresholds, claim persistence (DEC-6/19) |
+| **BL-17** | ✅ 2026-07-13 — H1 async pipeline: intake + clarify-answer POSTs return instantly; background runner drives the graph (never reintroduce sync calls — mobile Safari ~60s cap) |
+| **BL-18** | ✅ 2026-07-13 — H2 work-order persistence: `persist_completion` shared by runner + recovery |
+| **BL-19** | ✅ 2026-07-13 — H3 serving hardening bundle: graph init in lifespan, checkpointer pool, startup recovery |
+| **BL-20** | ✅ 2026-07-13 — H4 timestamp source consistency: DB clock everywhere; guarded by `tests/invariants/test_timestamp_defaults.py` |
+| **BL-21** | ✅ 2026-07-13 — H5 tenant-facing error UX (`web/src/errors.ts`): 4xx/5xx/network copy that never lies about whether a submission landed |
+| **BL-22** | ✅ 2026-07-13 — Mid-chat photo attach (DEC-26): status-link presign + `…/messages` accepts photos; media pointers (INV-3) + transcript rows |
+
+*(BL-13, BL-15 remainder, and BL-23 are open and restored in the table above. BL-14 and BL-16 are ⏸ deferred, above.)*
 
 ---
 
