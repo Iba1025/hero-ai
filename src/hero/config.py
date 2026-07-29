@@ -188,15 +188,15 @@ class Settings(BaseSettings):
     )
 
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──
-    embedder_impl: Literal[
-        "colmodernvbert", "colqwen3", "bedrock_cohere", "cloudflare", "stub"
-    ] = Field(
-        default="stub",
-        description=(
-            "'colmodernvbert' = self-hosted ColPali-family (visual, DEC-8); "
-            "'bedrock_cohere' = lean-mode hosted text embedding (DEC-29, INV-2 "
-            "clean); 'cloudflare' = Workers AI bge-m3 (recorded INV-2 exception)"
-        ),
+    embedder_impl: Literal["colmodernvbert", "colqwen3", "bedrock_cohere", "cloudflare", "stub"] = (
+        Field(
+            default="stub",
+            description=(
+                "'colmodernvbert' = self-hosted ColPali-family (visual, DEC-8); "
+                "'bedrock_cohere' = lean-mode hosted text embedding (DEC-29, INV-2 "
+                "clean); 'cloudflare' = Workers AI bge-m3 (recorded INV-2 exception)"
+            ),
+        )
     )
     reranker_impl: Literal["bge", "cohere", "cloudflare", "stub"] = Field(
         default="stub",
