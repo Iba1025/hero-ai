@@ -67,6 +67,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Phase 6 (DEC-27): liveness probe for compose healthchecks + external
+    # uptime monitoring. Deliberately shallow — "the process is serving".
+    # A wedged dependency shows up in the smoke tests, not here; a DB-touching
+    # health check would make the uptime monitor flap with the database.
+    @app.get("/health", tags=["ops"])
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
     app.include_router(outcomes.router, prefix="/outcomes", tags=["outcomes"])

@@ -72,6 +72,58 @@ class TestStubEmbedder(EmbedderContractSuite):
         return StubEmbedder()
 
 
+class _FakeBedrockBody:
+    def __init__(self, payload: dict[str, object]) -> None:
+        import json
+
+        self._raw = json.dumps(payload).encode()
+
+    def read(self) -> bytes:
+        return self._raw
+
+
+class _FakeBedrockEmbedClient:
+    """Offline stand-in for bedrock-runtime — echoes Cohere Embed v3 shape."""
+
+    def invoke_model(self, modelId: str, body: str) -> dict[str, object]:
+        import json
+
+        texts = json.loads(body)["texts"]
+        return {"body": _FakeBedrockBody({"embeddings": [[0.1] * 1024 for _ in texts]})}
+
+
+class TestBedrockCohereEmbedder(EmbedderContractSuite):
+    """Lean-mode adapter (DEC-29) against a faked Bedrock client — CI-safe.
+
+    The model is TEXT-ONLY: embed_page(image) raises by design, and ingestion
+    routes page text via embed_page_text — so that one contract test is
+    overridden to assert the documented raise + the text path instead.
+    """
+
+    def get_embedder(self) -> Embedder:
+        from hero.adapters.bedrock_embedder import BedrockCohereEmbedder
+
+        return BedrockCohereEmbedder(client=_FakeBedrockEmbedClient())
+
+    def test_embed_page_returns_multi_vector(self) -> None:  # type: ignore[override]
+        embedder = self.get_embedder()
+        with pytest.raises(RuntimeError, match="text-only"):
+            embedder.embed_page(self._page_image_bytes())
+        # The page path for this adapter is text (DEC-29):
+        result = embedder.embed_page_text("Section 4.2: compressor diagnostics")  # type: ignore[attr-defined]
+        assert isinstance(result, list)
+        assert len(result) == 1  # single vector as 1-element multivector
+        assert all(isinstance(v, float) for v in result[0])
+
+    def test_embed_page_texts_batch_shape(self) -> None:
+        from hero.adapters.bedrock_embedder import BedrockCohereEmbedder
+
+        embedder = BedrockCohereEmbedder(client=_FakeBedrockEmbedClient())
+        result = embedder.embed_page_texts_batch(["page one", "", "page three"])
+        assert len(result) == 3  # blank page still gets a vector
+        assert all(len(mv) == 1 for mv in result)
+
+
 # ---------------------------------------------------------------------------
 # Reranker contract
 # ---------------------------------------------------------------------------
@@ -119,6 +171,32 @@ class RerankerContractSuite:
 class TestStubReranker(RerankerContractSuite):
     def get_reranker(self) -> Reranker:
         return StubReranker()
+
+
+class _FakeBedrockRerankClient:
+    """Offline stand-in for bedrock-runtime — echoes Cohere Rerank 3.5 shape."""
+
+    def invoke_model(self, modelId: str, body: str) -> dict[str, object]:
+        import json
+
+        req = json.loads(body)
+        n = min(req["top_n"], len(req["documents"]))
+        results = [{"index": i, "relevance_score": 1.0 - i * 0.1} for i in range(n)]
+        return {"body": _FakeBedrockBody({"results": results})}
+
+
+class TestCohereReranker(RerankerContractSuite):
+    """Lean-mode Bedrock Rerank 3.5 adapter (DEC-29) — faked client, CI-safe."""
+
+    def get_reranker(self) -> Reranker:
+        from hero.adapters.cohere_reranker import CohereReranker
+
+        return CohereReranker(client=_FakeBedrockRerankClient())
+
+    def test_rerank_sets_reranked_stage(self) -> None:
+        reranker = self.get_reranker()
+        result = reranker.rerank("query", self._make_candidates(4), top_k=2)
+        assert all(c.retrieval_stage == "reranked" for c in result)
 
 
 # ---------------------------------------------------------------------------

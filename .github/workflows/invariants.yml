@@ -1,0 +1,42 @@
+# Phase 6 gate (DEC-27): invariant tests run against the SAME compose file
+# that serves production — composed postgres:16 + qdrant, published on
+# loopback via docker-compose.ci.yml. Test-only CI; deploys stay manual
+# by decision (BL-79 tracks CI-driven deploys, post-pilot).
+name: invariants
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # Dummy interpolation values — compose validates `${VAR:?}` file-wide even
+  # for services this job never starts. Nothing here reaches production.
+  # (Lean compose, DEC-29/30: postgres is the only ${VAR:?} left.)
+  POSTGRES_PASSWORD: ci-only
+  ENV_FILE: .env.production.example
+
+jobs:
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start composed stores (postgres + qdrant)
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait postgres qdrant
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync deps
+        run: uv sync
+
+      - name: Invariant suite against the composed stack
+        env:
+          DATABASE_URL: postgresql+asyncpg://hero:ci-only@127.0.0.1:5432/hero
+          QDRANT_URL: http://127.0.0.1:6333
+        run: uv run pytest tests/invariants/ -q
+
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs postgres qdrant

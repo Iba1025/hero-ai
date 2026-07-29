@@ -1,0 +1,26 @@
+# Build context hygiene — keep images small and secrets out (DEC-27).
+.git
+.venv
+__pycache__
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+node_modules
+web/node_modules
+web/dist
+
+# Secrets never enter the build context (belt and suspenders — also gitignored)
+.env
+.env.*
+!.env.production.example
+
+# Not needed in any image
+data/
+design/
+docs/
+evals/
+tests/
+scripts/
+*.md
+FRICTION.md

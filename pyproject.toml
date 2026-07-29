@@ -27,14 +27,8 @@ dependencies = [
     "qdrant-client==1.14.2",
     # HTTP
     "httpx==0.28.1",
-    # Embedder (ColPali-family, DEC-2 / BL-5)
-    "colpali-engine==0.3.17",
-    "torch==2.11.0",
-    "transformers==5.13.0",
+    # Ingestion (PDF → page images; Pillow stays in base — pypdfium2 renders via PIL)
     "Pillow==12.3.0",
-    # Reranker (BL-1, DEC-8: self-hosted)
-    "sentence-transformers==5.6.0",
-    # Ingestion (PDF → page images)
     "pypdfium2==5.11.0",
     # Calibration (DEC-5: Platt/isotonic)
     "scikit-learn==1.9.0",
@@ -42,7 +36,20 @@ dependencies = [
     "pyjwt==2.10.1",
 ]
 
+# Lean mode (DEC-29): the torch stack is an OPT-IN extra. The pilot image
+# ships without it (Bedrock-hosted embed/rerank); the self-hosted adapters
+# need `uv sync --extra selfhosted` (reversion path, trigger in DEC-29).
 [project.optional-dependencies]
+selfhosted = [
+    # Embedder (ColPali-family, DEC-2 / BL-5)
+    "colpali-engine==0.3.17",
+    "torch==2.11.0",
+    "transformers==5.13.0",
+    # Reranker (BL-1, DEC-8: self-hosted)
+    "sentence-transformers==5.6.0",
+]
+
+[dependency-groups]
 dev = [
     "pytest==8.4.1",
     "pytest-asyncio==1.4.0",
@@ -55,6 +62,17 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# Docker/Linux builds pull CPU-only torch wheels (DEC-27: single VM, no GPU) —
+# the default PyPI linux wheel drags ~5 GB of CUDA libs into the image.
+# macOS dev resolution is unaffected (darwin wheels are CPU/MPS already).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hero"]

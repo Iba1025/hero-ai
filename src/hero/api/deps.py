@@ -115,6 +115,13 @@ def make_embedder(settings: Settings) -> Any:
         return ColModernVBertEmbedder()
     if settings.embedder_impl == "colqwen3":
         raise ValueError("EMBEDDER_IMPL=colqwen3 has no adapter yet (BL-5 bake-off pending)")
+    if settings.embedder_impl == "bedrock_cohere":
+        from hero.adapters.bedrock_embedder import BedrockCohereEmbedder
+
+        return BedrockCohereEmbedder(
+            region=settings.bedrock_region,
+            api_key=settings.aws_bearer_token_bedrock,
+        )
     from hero.adapters.stub_embedder import StubEmbedder
 
     return StubEmbedder()
@@ -129,7 +136,10 @@ def make_reranker(settings: Settings) -> Any:
     if settings.reranker_impl == "cohere":
         from hero.adapters.cohere_reranker import CohereReranker
 
-        return CohereReranker()
+        return CohereReranker(
+            region=settings.bedrock_region,
+            api_key=settings.aws_bearer_token_bedrock,
+        )
     from hero.adapters.stub_reranker import StubReranker
 
     return StubReranker()

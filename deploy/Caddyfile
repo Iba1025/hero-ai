@@ -1,0 +1,29 @@
+# Hero.AI edge config (Phase 6, DEC-27).
+#
+# SITE_ADDRESS controls everything:
+#   - local compose loop:  SITE_ADDRESS=http://localhost   (plain HTTP, no ACME)
+#   - pilot server:        SITE_ADDRESS=hero.example.ca    (automatic HTTPS)
+# ACME_EMAIL is used for the Let's Encrypt account in production.
+
+{
+	email {$ACME_EMAIL:ops@example.invalid}
+}
+
+{$SITE_ADDRESS:http://localhost} {
+	encode zstd gzip
+
+	# API paths → api container. Everything the FastAPI app mounts
+	# (src/hero/api/main.py) plus the /health liveness probe.
+	@api path /auth/* /tickets/* /outcomes/* /uploads/* /public/* /health
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	# Everything else is the SPA (hash-routed; index.html fallback is a
+	# belt-and-suspenders for any non-hash deep link).
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

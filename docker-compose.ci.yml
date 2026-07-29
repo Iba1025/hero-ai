@@ -1,0 +1,10 @@
+# CI override (Phase 6 gate): publish postgres/qdrant on loopback so the
+# invariant suite on the runner can reach the composed stores.
+# NEVER use on the pilot server — stores stay compose-internal there (DEC-27).
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  qdrant:
+    ports:
+      - "127.0.0.1:6333:6333"

@@ -151,9 +151,39 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ── AWS Bedrock (lean mode, DEC-29 — ca-central-1 keeps INV-2 clean) ─
+    bedrock_region: str = Field(
+        default="ca-central-1",
+        description=(
+            "Bedrock region for lean-mode embed/rerank (DEC-29). MUST stay Canadian "
+            "(INV-2) — region_guard enforces. Auth is the AWS credential chain; a "
+            "long-term Bedrock API key rides AWS_BEARER_TOKEN_BEDROCK"
+        ),
+    )
+    aws_bearer_token_bedrock: str = Field(
+        default="",
+        description=(
+            "Long-term Bedrock API key (optional). botocore only reads it from the "
+            "AWS_BEARER_TOKEN_BEDROCK env var — typed here so config stays the "
+            "single env-var inventory; adapters export it before client creation"
+        ),
+    )
+
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──
-    embedder_impl: Literal["colmodernvbert", "colqwen3", "stub"] = Field(default="stub")
-    reranker_impl: Literal["bge", "cohere", "stub"] = Field(default="stub")
+    embedder_impl: Literal["colmodernvbert", "colqwen3", "bedrock_cohere", "stub"] = Field(
+        default="stub",
+        description=(
+            "'colmodernvbert' = self-hosted ColPali-family (visual, DEC-8); "
+            "'bedrock_cohere' = lean-mode hosted text embedding (DEC-29)"
+        ),
+    )
+    reranker_impl: Literal["bge", "cohere", "stub"] = Field(
+        default="stub",
+        description=(
+            "'bge' = self-hosted cross-encoder (DEC-8); 'cohere' = Bedrock "
+            "Rerank 3.5 in ca-central-1 (lean mode, DEC-29)"
+        ),
+    )
     calibrator_impl: Literal["platt", "isotonic", "stub"] = Field(default="platt")
     vlm_impl: Literal["litellm", "stub"] = Field(
         default="stub",
@@ -197,6 +227,7 @@ def region_guard(settings: Settings) -> None:
         ("DATABASE_URL", settings.database_url),
         ("QDRANT_URL", settings.qdrant_url),
         ("LANGFUSE_HOST", settings.langfuse_host),
+        ("BEDROCK_REGION", settings.bedrock_region),  # DEC-29 lean-mode inference
     ]
 
     for name, value in checks:

@@ -1,5 +1,6 @@
 """Graph assembly — wires the pipeline nodes with PostgresSaver (spec §4).
 
+
 Every node runs under the checkpointer (INV-6).
 CLARIFY uses interrupt() — graph pauses, pending_question surfaced via API.
 """
