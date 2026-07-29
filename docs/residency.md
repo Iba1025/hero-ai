@@ -10,8 +10,15 @@
 
 | Service | Purpose | Region | Data crossing | Retention | Mitigation / decision | Reviewed |
 |---|---|---|---|---|---|---|
-| AWS Bedrock — Cohere Embed Multilingual v3 (`cohere.embed-multilingual-v3`) | Ingestion + query embedding (lean mode) | **ca-central-1** (AWS lists In-Region ✓) | Manual page text, query text | Bedrock does not retain prompts for model training (AWS commitment) | DEC-29. In-region → **no INV-2 gap**. Embed v4 rejected: Global cross-region only at ca-central-1 | 2026-07-29 |
-| AWS Bedrock — Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) | Retrieval reranking (lean mode) | **ca-central-1** (AWS lists single-region supported *in* ca-central-1) | Query + candidate chunk text | As above | DEC-29. In-region → **no INV-2 gap** | 2026-07-29 |
+| **Cloudflare Workers AI — `@cf/baai/bge-m3`** | Ingestion + query embedding (lean mode) | **Global — NO Canadian residency commitment** | Manual page text, query text | Cloudflare states inputs/outputs are not used to train models | ⚠️ **RECORDED INV-2 EXCEPTION, not compliance** — founder-approved 2026-07-30, **pending its DEC number**. Pairs with DEC-28 (R2) in any procurement review. Migration target: Bedrock ca-central-1 (rows below). Trigger mirrors DEC-28: BEFORE any procurement/compliance review and BEFORE the first paying customer | 2026-07-30 |
+| **Cloudflare Workers AI — `@cf/baai/bge-reranker-base`** | Retrieval reranking (lean mode) | **Global — NO Canadian residency commitment** | Query + candidate chunk text | As above | ⚠️ Same recorded exception as above | 2026-07-30 |
+
+## Migration target (INV-2-clean, adapters built and unused — no AWS credentials yet)
+
+| Service | Purpose | Region | Data crossing | Retention | Mitigation / decision | Reviewed |
+|---|---|---|---|---|---|---|
+| AWS Bedrock — Cohere Embed Multilingual v3 (`cohere.embed-multilingual-v3`) | Ingestion + query embedding | **ca-central-1** (AWS lists In-Region ✓) | Manual page text, query text | Bedrock does not retain prompts for model training (AWS commitment) | DEC-29. In-region → **no INV-2 gap**. Embed v4 rejected: Global cross-region only at ca-central-1 | 2026-07-29 |
+| AWS Bedrock — Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) | Retrieval reranking | **ca-central-1** (AWS lists single-region supported *in* ca-central-1) | Query + candidate chunk text | As above | DEC-29. In-region → **no INV-2 gap** | 2026-07-29 |
 | Cloudflare R2 | Tenant-submitted media (photos) | **NA location hint — no Canadian jurisdiction guarantee** | Photo bytes (pointers only in Postgres, INV-3) | Until deleted by us | **DEC-28 recorded INV-2 exception — top open risk.** Hard migration trigger: BEFORE any procurement/compliance review and BEFORE the first paying customer. Swap is presign-config + object copy only (INV-3) | 2026-07-29 |
 
 ## Recorded postures for services NOT yet in use (do not onboard without updating this table)

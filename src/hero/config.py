@@ -169,19 +169,41 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ── Cloudflare Workers AI (lean-mode variant — RECORDED INV-2 EXCEPTION,
+    # founder-approved 2026-07-30 pending DEC number; see docs/residency.md) ──
+    cloudflare_account_id: str = Field(
+        default="",
+        description=(
+            "Cloudflare account id for Workers AI (same account as R2; derivable "
+            "from the R2 endpoint host). Required when an adapter impl is "
+            "'cloudflare'"
+        ),
+    )
+    cloudflare_api_token: str = Field(
+        default="",
+        description=(
+            "Cloudflare API token with Workers AI permission (Bearer). NOT the R2 "
+            "S3 keys — those cannot call Workers AI"
+        ),
+    )
+
     # ── Adapter selectors (swappable interfaces — DEC-2, DEC-8, DEC-5) ──
-    embedder_impl: Literal["colmodernvbert", "colqwen3", "bedrock_cohere", "stub"] = Field(
+    embedder_impl: Literal[
+        "colmodernvbert", "colqwen3", "bedrock_cohere", "cloudflare", "stub"
+    ] = Field(
         default="stub",
         description=(
             "'colmodernvbert' = self-hosted ColPali-family (visual, DEC-8); "
-            "'bedrock_cohere' = lean-mode hosted text embedding (DEC-29)"
+            "'bedrock_cohere' = lean-mode hosted text embedding (DEC-29, INV-2 "
+            "clean); 'cloudflare' = Workers AI bge-m3 (recorded INV-2 exception)"
         ),
     )
-    reranker_impl: Literal["bge", "cohere", "stub"] = Field(
+    reranker_impl: Literal["bge", "cohere", "cloudflare", "stub"] = Field(
         default="stub",
         description=(
             "'bge' = self-hosted cross-encoder (DEC-8); 'cohere' = Bedrock "
-            "Rerank 3.5 in ca-central-1 (lean mode, DEC-29)"
+            "Rerank 3.5 in ca-central-1 (lean mode, DEC-29, INV-2 clean); "
+            "'cloudflare' = Workers AI bge-reranker-base (recorded INV-2 exception)"
         ),
     )
     calibrator_impl: Literal["platt", "isotonic", "stub"] = Field(default="platt")
@@ -239,6 +261,11 @@ def region_guard(settings: Settings) -> None:
         # R2 "auto" region is fine (maps to ca jurisdiction via Cloudflare config)
         if name == "R2_ENDPOINT" and settings.r2_region == "auto":
             continue
+        # NOTE: Workers AI (embedder/reranker_impl == "cloudflare") has no region
+        # string to check — it is a RECORDED INV-2 EXCEPTION (founder-approved
+        # 2026-07-30, pending DEC number), not compliance. docs/residency.md is
+        # the audit record; the Bedrock ca-central-1 adapters are the migration
+        # target.
         # Detectable non-Canadian region → hard fail
         if _has_non_canadian_region(value):
             raise RuntimeError(

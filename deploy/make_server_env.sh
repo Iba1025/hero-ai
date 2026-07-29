@@ -19,6 +19,24 @@ fi
 get() { grep -E "^$1=" .env | head -1 | cut -d= -f2-; }
 gen() { openssl rand -hex 32; }
 
+# Lean-mode inference is Workers AI (founder decision 2026-07-30, recorded
+# INV-2 exception — see docs/residency.md). Needs a Workers-AI-scoped API
+# token; the R2 S3 keys cannot call it. Account id derives from the R2 host.
+CF_TOKEN="$(get CLOUDFLARE_API_TOKEN)"
+if [ -z "$CF_TOKEN" ]; then
+    echo "REFUSING: CLOUDFLARE_API_TOKEN missing from local .env" >&2
+    echo "(mint one with Workers AI permission — the R2 keys cannot call Workers AI)" >&2
+    exit 1
+fi
+CF_ACCOUNT_ID="$(get CLOUDFLARE_ACCOUNT_ID)"
+if [ -z "$CF_ACCOUNT_ID" ]; then
+    CF_ACCOUNT_ID="$(get R2_ENDPOINT | sed -E 's#https?://([a-f0-9]+)\.r2\.cloudflarestorage\.com.*#\1#')"
+fi
+if [ -z "$CF_ACCOUNT_ID" ]; then
+    echo "REFUSING: cannot determine CLOUDFLARE_ACCOUNT_ID (not in .env, not derivable from R2_ENDPOINT)" >&2
+    exit 1
+fi
+
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
 chmod 600 "$TMP"
@@ -44,7 +62,11 @@ R2_ACCESS_KEY_ID=$(get R2_ACCESS_KEY_ID)
 R2_SECRET_ACCESS_KEY=$(get R2_SECRET_ACCESS_KEY)
 R2_REGION=auto
 
-# ── Bedrock lean-mode inference (DEC-29 — ca-central-1, INV-2 clean) ──
+# ── Lean-mode inference: Cloudflare Workers AI (recorded INV-2 exception,
+# founder-approved 2026-07-30 pending DEC number — docs/residency.md).
+# Bedrock ca-central-1 stays the INV-2-clean migration target (DEC-29). ──
+CLOUDFLARE_ACCOUNT_ID=$CF_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN=$CF_TOKEN
 BEDROCK_REGION=ca-central-1
 AWS_BEARER_TOKEN_BEDROCK=$(get AWS_BEARER_TOKEN_BEDROCK)
 
@@ -61,9 +83,9 @@ VLM_MODEL_CHAT=claude-haiku-4-5-20251001
 ANTHROPIC_API_KEY=$(get ANTHROPIC_API_KEY)
 OPENAI_API_KEY=$(get OPENAI_API_KEY)
 
-# ── adapters (BL-19/H3 — lean selectors, DEC-29) ──
-EMBEDDER_IMPL=bedrock_cohere
-RERANKER_IMPL=cohere
+# ── adapters (BL-19/H3 — lean selectors; cloudflare = Workers AI variant) ──
+EMBEDDER_IMPL=cloudflare
+RERANKER_IMPL=cloudflare
 CALIBRATOR_IMPL=platt
 VLM_IMPL=litellm
 
