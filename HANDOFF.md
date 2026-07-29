@@ -221,6 +221,9 @@ per the work order.
   cross-vendor case history, document ingestion, the retrieval loop, federation boundaries.
 - `WORK_ORDER_v8.2.md` — **preservation boundaries, precedence, phase gates, stop
   conditions.** Read before any code.
+- `PROGRESS.md` — phase tracker: work-order phases split into sub-components with status.
+  Derived view (PRD §6 stays the index of truth); update rows in the same PR that
+  completes a component.
 - `HERO_AI_TECHNICAL_SPEC.md` — implementation spec; `[IMPL]` = built, `[SPEC]` = not.
 - `CLAUDE.md` — commands, precedence rules.
 - `FRICTION.md` — phone-run findings (verbatim, triaged BLOCKER/ANNOYANCE/NIT).

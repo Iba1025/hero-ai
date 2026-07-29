@@ -58,4 +58,5 @@ uv run mypy src/                          # --strict; CI-blocking
 - Commits cite IDs: `feat(retrieve): add corrective loop [BL-9][DEC-11]`.
 - Model boundaries only via `src/hero/interfaces/` Protocols — never call an SDK from a graph node.
 - Prompts are files in `src/hero/prompts/`, not inline strings.
-- Completing a backlog item = update its BL row in the PRD in the same PR.
+- Completing a backlog item = update its BL row in the PRD in the same PR — and the matching
+  sub-component row in `PROGRESS.md` (the phase tracker; derived view, PRD wins).
