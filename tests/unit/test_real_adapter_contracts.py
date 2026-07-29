@@ -36,3 +36,38 @@ class TestBGEReranker(RerankerContractSuite):
         from hero.adapters.bge_reranker import BGEReranker
 
         return BGEReranker()
+
+
+# ---------------------------------------------------------------------------
+# Lean-mode Bedrock adapters (DEC-29) — live calls to ca-central-1.
+# Gated separately from model downloads: need AWS credentials, cost ~$0.01.
+# ---------------------------------------------------------------------------
+requires_bedrock = pytest.mark.skipif(
+    os.environ.get("HERO_TEST_BEDROCK", "") != "1",
+    reason="Set HERO_TEST_BEDROCK=1 (with AWS creds for ca-central-1) to hit Bedrock live",
+)
+
+
+@requires_bedrock
+class TestLiveBedrockCohereEmbedder(EmbedderContractSuite):
+    def get_embedder(self) -> Embedder:
+        from hero.adapters.bedrock_embedder import BedrockCohereEmbedder
+
+        return BedrockCohereEmbedder()
+
+    def test_embed_page_returns_multi_vector(self) -> None:  # type: ignore[override]
+        # Text-only adapter (DEC-29): the page path is embed_page_text.
+        embedder = self.get_embedder()
+        with pytest.raises(RuntimeError, match="text-only"):
+            embedder.embed_page(self._page_image_bytes())
+        result = embedder.embed_page_text("Compressor short-cycles; check contactor")  # type: ignore[attr-defined]
+        assert len(result) == 1
+        assert len(result[0]) == 1024  # Embed v3 output dim
+
+
+@requires_bedrock
+class TestLiveCohereReranker(RerankerContractSuite):
+    def get_reranker(self) -> Reranker:
+        from hero.adapters.cohere_reranker import CohereReranker
+
+        return CohereReranker()

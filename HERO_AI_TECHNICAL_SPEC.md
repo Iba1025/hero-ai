@@ -234,6 +234,31 @@ caps; `POST …/messages` takes `photos` — media pointer rows (INV-3) plus one
 redirect. In-flight runs are NOT fed (mid-run evidence injection is BL-23, design-first).
 Form status view, operator/contractor cockpit, pipeline, guardrails: untouched.
 
+**Pilot containerization — lean mode (Phase 6, DEC-27/28/29/30)** `[IMPL: docker-compose.yml,
+docker/api.Dockerfile, docker/web.Dockerfile, deploy/Caddyfile, .env.production.example,
+.dockerignore, src/hero/api/main.py (/health), src/hero/adapters/bedrock_embedder.py,
+src/hero/adapters/cohere_reranker.py]`: one compose stack, FOUR services (caddy, api,
+postgres:16, qdrant), identical on laptop and the 4 GB pilot VM. `api` image
+(python:3.12-slim + `uv sync --frozen --no-dev`, non-root) carries NO torch and NO model
+weights (DEC-29): embed = Bedrock Cohere Embed Multilingual v3, rerank = Bedrock Cohere
+Rerank 3.5, both ca-central-1 (in-region → INV-2 clean). The self-hosted torch stack
+(colpali-engine/torch/transformers/sentence-transformers) is the opt-in `selfhosted`
+pyproject extra — the reversion path; the `pytorch-cpu` uv index pin keeps CUDA out of any
+future linux resolution of that extra. Text-only embedding rides the existing duck-typed
+ingestion pattern: adapters exposing `embed_page_text`/`embed_page_texts_batch` get the
+extracted page text (already produced for BM25) and image rendering is skipped; the single
+vector is stored as a 1-element multivector so the MaxSim collection schema is untouched.
+`uv.lock` is committed (reproducible builds). `caddy` image builds the SPA (node:22-alpine,
+`npm run build`) into caddy:2-alpine — no API origin is baked anywhere: every SPA call is a
+same-origin relative path and the Caddyfile proxies `/auth /tickets /outcomes /uploads
+/public /health` to `api:8000`; `SITE_ADDRESS` env flips localhost-HTTP ↔ domain-auto-HTTPS
+without a rebuild. Langfuse is DEFERRED from the pilot box (DEC-30): no langfuse services in
+compose, `LANGFUSE_*` unset → tracing is a verified no-op (`observability/tracing.py`). Only
+caddy publishes 80/443; postgres/qdrant are compose-internal. `GET /health` is a
+deliberately shallow liveness probe (compose healthchecks + external uptime monitoring);
+dependency health is proven by smoke tests, not the probe. Manuals mount read-only at
+`/manuals` from `./data/manuals` for ingestion runs.
+
 ---
 
 ## 4. Graph State `[IMPL: src/hero/graph/state.py]` (DEC-17: TicketState Pydantic + GraphState TypedDict)

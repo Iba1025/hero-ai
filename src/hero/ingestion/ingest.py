@@ -147,9 +147,17 @@ def ingest_pdf(
     n_pages = len(doc)
     doc.close()
 
+    # Text-only embedders (lean mode, DEC-29: e.g. Bedrock Cohere Embed v3)
+    # expose embed_page_text — same duck-typed pattern as embed_pages_batch.
+    # They embed the extracted page text (already needed for BM25) and skip
+    # image rendering entirely. hasattr checks stay inline: mypy only
+    # narrows hasattr at the check site, not through a variable.
+
     # First, embed one page to get vector dim and ensure collection exists
-    first_image = _render_page_image(pdf_path, 0)
-    first_vectors = embedder.embed_page(first_image)
+    if hasattr(embedder, "embed_page_text"):
+        first_vectors = embedder.embed_page_text(_extract_page_text(pdf_path, 0))
+    else:
+        first_vectors = embedder.embed_page(_render_page_image(pdf_path, 0))
     vector_dim = len(first_vectors[0])
     ensure_collection(client, vector_dim)
 
@@ -159,19 +167,27 @@ def ingest_pdf(
         batch_end = min(batch_start + batch_size, n_pages)
         page_indices = list(range(batch_start, batch_end))
 
-        # Render images
-        images = [_render_page_image(pdf_path, i) for i in page_indices]
+        # Page text is needed regardless (BM25 sparse + reranker payload)
+        texts = [_extract_page_text(pdf_path, i) for i in page_indices]
 
         # Embed (batch if available, else one-by-one)
-        if hasattr(embedder, "embed_pages_batch"):
-            all_vectors = embedder.embed_pages_batch(images)
+        if hasattr(embedder, "embed_page_texts_batch"):
+            all_vectors = embedder.embed_page_texts_batch(texts)
+        elif hasattr(embedder, "embed_page_text"):
+            all_vectors = [embedder.embed_page_text(t) for t in texts]
+        elif hasattr(embedder, "embed_pages_batch"):
+            all_vectors = embedder.embed_pages_batch(
+                [_render_page_image(pdf_path, i) for i in page_indices]
+            )
         else:
-            all_vectors = [embedder.embed_page(img) for img in images]
+            all_vectors = [
+                embedder.embed_page(_render_page_image(pdf_path, i)) for i in page_indices
+            ]
 
         # Build points
         points: list[PointStruct] = []
         for i, page_idx in enumerate(page_indices):
-            text = _extract_page_text(pdf_path, page_idx)
+            text = texts[i]
             sparse = text_to_sparse_vector(text)
             point_id = _point_id(doc_id, page_idx)
 

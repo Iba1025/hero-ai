@@ -1,0 +1,872 @@
+/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/langgraph/checkpoint/base/__init__.py:18: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.
+  from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[CHECKPOINTER] AsyncPostgresSaver (localhost:5432/hero)
+Loading weights:   0%|          | 0/345 [00:00<?, ?it/s]Loading weights: 100%|██████████| 345/345 [00:00<00:00, 6145.98it/s]
+Loading weights:   0%|          | 0/178 [00:00<?, ?it/s]Loading weights: 100%|██████████| 178/178 [00:00<00:00, 3987.02it/s]
+Loading weights:   0%|          | 0/393 [00:00<?, ?it/s]Loading weights: 100%|██████████| 393/393 [00:00<00:00, 5825.34it/s]
+WARNING:hero.graph.nodes.diagnose:[DIAGNOSE] unparseable response — retrying once (DEC-20)
+[92m10:59:22 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-fable-5: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 55, in map_aiohttp_exceptions
+    yield
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 206, in handle_async_request
+    response = await client_session.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 834, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 558, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/streams.py", line 705, in read
+    await self._waiter
+aiohttp.client_exceptions.SocketTimeoutError: Timeout on reading data from socket
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 233, in post
+    response = await self.client.send(req, stream=stream)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 199, in handle_async_request
+    with map_aiohttp_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 69, in map_aiohttp_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: Timeout on reading data from socket
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 262, in post
+    raise litellm.Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 595, in exception_type
+    raise Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+ERROR:LiteLLM:Fallback attempt failed for model claude-fable-5: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 55, in map_aiohttp_exceptions
+    yield
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 206, in handle_async_request
+    response = await client_session.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 834, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 558, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/streams.py", line 705, in read
+    await self._waiter
+aiohttp.client_exceptions.SocketTimeoutError: Timeout on reading data from socket
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 233, in post
+    response = await self.client.send(req, stream=stream)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 199, in handle_async_request
+    with map_aiohttp_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 69, in map_aiohttp_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: Timeout on reading data from socket
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 262, in post
+    raise litellm.Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 595, in exception_type
+    raise Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=29119.33 seconds
+python3(52899) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52900) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+[QDRANT] index integrity OK (version stamp + BM25 canary)
+[ADAPTERS] live (VLM=LiteLLMVLM primary=claude-fable-5 verify=claude-sonnet-4-6 fallback=gpt-4o triage=claude-sonnet-4-6 (verify), embedder=colmodernvbert, reranker=bge, qdrant=http://localhost:6333)
+
+======================================================================
+Hero.AI Eval — 6 golden tickets (mode=LIVE, runs=3)
+======================================================================
+
+----- run 1/3 -----
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-002
+  [CLARIFY] Resuming with answer: 'The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago.'
+  [CLARIFY] Resumed successfully. clarify_rounds=3
+[PASS] EVAL-002: HVAC system making strange noise. Not cooling prop...
+  trade=hvac urgency=urgent complexity=standard path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 5, 'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=35.499s cost=$0.1115
+    cost[primary/diagnose]: $0.0711 (1 calls, 1697/1083 tok, 15.59s)
+    cost[triage]: $0.0043 (1 calls, 1101/69 tok, 2.22s)
+    cost[verify/entailment]: $0.0361 (9 calls, 10536/297 tok, 19.05s)
+    nodes: intake=0.24s triage=2.24s retrieve=8.75s diagnose=15.62s verify=7.03s safety_gate=0.00s resolve=0.05s procure=0.00s outcome=1.15s
+
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-005
+  [CLARIFY] Resuming with answer: 'The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later.'
+  [CLARIFY] Resumed successfully. clarify_rounds=3
+[PASS] EVAL-005: The rooftop AC serving our floor has several probl...
+  trade=hvac urgency=urgent complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 3, 'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=61.757s cost=$0.1105
+    cost[primary/diagnose]: $0.0779 (1 calls, 1765/1205 tok, 22.07s)
+    cost[triage]: $0.0045 (1 calls, 1154/69 tok, 11.71s)
+    cost[verify/entailment]: $0.0281 (7 calls, 8206/231 tok, 12.16s)
+    nodes: intake=0.02s triage=11.72s retrieve=21.36s diagnose=22.11s verify=3.99s safety_gate=0.01s resolve=0.01s procure=0.00s outcome=1.06s
+
+[PASS] EVAL-003: Strong gas smell near the furnace in the basement....
+  trade=gas urgency=emergency complexity=standard path=full escalated=True escalation_reason=hard_category
+  verify_pass=True work_order_id=False sku=False
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 2, 'descriptive': 3} meets_min=True
+  retrieval@5=1.0 latency=27.521s cost=$0.0880
+    cost[primary/diagnose]: $0.0636 (1 calls, 1695/933 tok, 15.24s)
+    cost[triage]: $0.0043 (1 calls, 1108/68 tok, 1.66s)
+    cost[verify/entailment]: $0.0201 (5 calls, 5873/165 tok, 9.28s)
+    nodes: intake=0.00s triage=1.66s retrieve=7.40s diagnose=15.27s verify=3.06s safety_gate=0.07s
+
+[PASS] EVAL-004: Kitchen faucet dripping steadily from the spout. E...
+  trade=plumbing urgency=routine complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 4, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=22.634s cost=$0.0902
+    cost[primary/diagnose]: $0.0610 (1 calls, 1658/889 tok, 16.65s)
+    cost[triage]: $0.0044 (1 calls, 1107/70 tok, 1.95s)
+    cost[verify/entailment]: $0.0196 (5 calls, 5708/165 tok, 7.67s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1498/50 tok, 1.70s)
+    nodes: intake=0.02s triage=1.95s retrieve_fast=1.74s diagnose=16.66s verify=2.21s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+[PASS] EVAL-001: Leaking pipe under the kitchen sink. Water pooling...
+  trade=plumbing urgency=urgent complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 4, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=21.527s cost=$0.0899
+    cost[primary/diagnose]: $0.0609 (1 calls, 1643/890 tok, 14.47s)
+    cost[triage]: $0.0044 (1 calls, 1108/70 tok, 1.47s)
+    cost[verify/entailment]: $0.0194 (5 calls, 5637/165 tok, 7.60s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1486/50 tok, 3.33s)
+    nodes: intake=0.01s triage=1.47s retrieve_fast=3.36s diagnose=14.47s verify=2.15s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.03s
+
+[FAIL] EVAL-006: Something in our unit is broken and it keeps makin...
+  trade=other urgency=routine complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 6} meets_min=True
+  retrieval@5=1.0 latency=43.112s cost=$0.1525
+    cost[primary/diagnose]: $0.1242 (2 calls, 3396/1804 tok, 28.22s)
+    cost[triage]: $0.0044 (1 calls, 1113/68 tok, 6.16s)
+    cost[verify/entailment]: $0.0240 (6 calls, 7006/198 tok, 11.91s)
+    nodes: intake=0.02s triage=6.17s retrieve=3.80s diagnose=28.24s verify=4.81s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.03s
+  FAILED checks: {'organic_clarify': False, 'clarify_behavior_correct': False}
+
+----- run 2/3 -----
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-002
+  [CLARIFY] Resuming with answer: 'The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-002: HVAC system making strange noise. Not cooling prop...
+  trade=hvac urgency=urgent complexity=standard path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 5, 'part_number': 3} meets_min=True
+  retrieval@5=1.0 latency=26.381s cost=$0.1118
+    cost[primary/diagnose]: $0.0753 (1 calls, 1736/1159 tok, 14.87s)
+    cost[triage]: $0.0043 (1 calls, 1101/69 tok, 2.18s)
+    cost[verify/entailment]: $0.0321 (8 calls, 9382/264 tok, 13.64s)
+    nodes: intake=0.00s triage=2.18s retrieve=6.11s clarify=0.01s diagnose=14.87s verify=3.05s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.01s
+
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-005
+  [CLARIFY] Resuming with answer: 'The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-005: The rooftop AC serving our floor has several probl...
+  trade=hvac urgency=urgent complexity=complex path=full escalated=False escalation_reason=None[92m17:04:44 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-fable-5: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 55, in map_aiohttp_exceptions
+    yield
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 206, in handle_async_request
+    response = await client_session.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 834, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 558, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/streams.py", line 705, in read
+    await self._waiter
+aiohttp.client_exceptions.SocketTimeoutError: Timeout on reading data from socket
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 233, in post
+    response = await self.client.send(req, stream=stream)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 199, in handle_async_request
+    with map_aiohttp_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 69, in map_aiohttp_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: Timeout on reading data from socket
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 262, in post
+    raise litellm.Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 595, in exception_type
+    raise Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+ERROR:LiteLLM:Fallback attempt failed for model claude-fable-5: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 55, in map_aiohttp_exceptions
+    yield
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 206, in handle_async_request
+    response = await client_session.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 834, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 558, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/streams.py", line 705, in read
+    await self._waiter
+aiohttp.client_exceptions.SocketTimeoutError: Timeout on reading data from socket
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 233, in post
+    response = await self.client.send(req, stream=stream)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 199, in handle_async_request
+    with map_aiohttp_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 69, in map_aiohttp_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: Timeout on reading data from socket
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 262, in post
+    raise litellm.Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 595, in exception_type
+    raise Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=21850.74 seconds
+[92m21:00:56 - LiteLLM:ERROR[0m: fallback_utils.py:62 - Fallback attempt failed for model claude-fable-5: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 55, in map_aiohttp_exceptions
+    yield
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 206, in handle_async_request
+    response = await client_session.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 834, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 558, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/streams.py", line 705, in read
+    await self._waiter
+aiohttp.client_exceptions.SocketTimeoutError: Timeout on reading data from socket
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 233, in post
+    response = await self.client.send(req, stream=stream)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 199, in handle_async_request
+    with map_aiohttp_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 69, in map_aiohttp_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: Timeout on reading data from socket
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 262, in post
+    raise litellm.Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 595, in exception_type
+    raise Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+ERROR:LiteLLM:Fallback attempt failed for model claude-fable-5: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 55, in map_aiohttp_exceptions
+    yield
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 206, in handle_async_request
+    response = await client_session.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client.py", line 834, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 558, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/aiohttp/streams.py", line 705, in read
+    await self._waiter
+aiohttp.client_exceptions.SocketTimeoutError: Timeout on reading data from socket
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 233, in post
+    response = await self.client.send(req, stream=stream)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 199, in handle_async_request
+    with map_aiohttp_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/aiohttp_transport.py", line 69, in map_aiohttp_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: Timeout on reading data from socket
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 249, in acompletion_function
+    response = await async_handler.post(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/logging_utils.py", line 135, in async_wrapper
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/custom_httpx/http_handler.py", line 262, in post
+    raise litellm.Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 525, in acompletion
+    response = await init_response
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/llms/anthropic/chat/handler.py", line 268, in acompletion_function
+    raise AnthropicError(
+litellm.llms.anthropic.common_utils.AnthropicError: litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/fallback_utils.py", line 52, in async_completion_with_fallbacks
+    response = await litellm.acompletion(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1495, in wrapper_async
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/utils.py", line 1356, in wrapper_async
+    result = await original_function(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/main.py", line 544, in acompletion
+    raise exception_type(
+          ^^^^^^^^^^^^^^^
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 2271, in exception_type
+    raise e
+  File "/Users/inambinalam/HERO_AI/.venv/lib/python3.12/site-packages/litellm/litellm_core_utils/exception_mapping_utils.py", line 595, in exception_type
+    raise Timeout(
+litellm.exceptions.Timeout: litellm.Timeout: AnthropicException - litellm.Timeout: Connection timed out. Timeout passed=600.0, time taken=14129.209 seconds
+ERROR:asyncio:Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x13dae7230>
+
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 3, 'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=30.470s cost=$0.1163
+    cost[primary/diagnose]: $0.0837 (1 calls, 1845/1304 tok, 18.85s)
+    cost[triage]: $0.0045 (1 calls, 1154/69 tok, 1.70s)
+    cost[verify/entailment]: $0.0281 (7 calls, 8219/231 tok, 11.30s)
+    nodes: intake=0.01s triage=1.70s retrieve=6.64s clarify=0.13s diagnose=18.86s verify=2.83s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.03s
+
+[PASS] EVAL-003: Strong gas smell near the furnace in the basement....
+  trade=gas urgency=emergency complexity=standard path=full escalated=True escalation_reason=hard_category
+  verify_pass=True work_order_id=False sku=False
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 2, 'descriptive': 3} meets_min=True
+  retrieval@5=1.0 latency=21.062s cost=$0.0821
+    cost[primary/diagnose]: $0.0577 (1 calls, 1695/815 tok, 14.19s)
+    cost[triage]: $0.0043 (1 calls, 1108/68 tok, 1.54s)
+    cost[verify/entailment]: $0.0201 (5 calls, 5874/165 tok, 8.86s)
+    nodes: intake=0.00s triage=1.54s retrieve=2.80s diagnose=14.20s verify=2.48s safety_gate=0.02s
+
+[PASS] EVAL-004: Kitchen faucet dripping steadily from the spout. E...
+  trade=plumbing urgency=routine complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=18.493s cost=$0.0802
+    cost[primary/diagnose]: $0.0548 (1 calls, 1658/765 tok, 12.59s)
+    cost[triage]: $0.0044 (1 calls, 1107/70 tok, 2.10s)
+    cost[verify/entailment]: $0.0157 (4 calls, 4584/132 tok, 6.83s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1498/50 tok, 1.34s)
+    nodes: intake=0.00s triage=2.10s retrieve_fast=1.37s diagnose=12.60s verify=2.36s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.04s
+
+[PASS] EVAL-001: Leaking pipe under the kitchen sink. Water pooling...
+  trade=plumbing urgency=urgent complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 4, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=21.275s cost=$0.0897
+    cost[primary/diagnose]: $0.0607 (1 calls, 1643/886 tok, 14.85s)
+    cost[triage]: $0.0044 (1 calls, 1108/70 tok, 1.47s)
+    cost[verify/entailment]: $0.0194 (5 calls, 5637/165 tok, 8.67s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1486/50 tok, 2.49s)
+    nodes: intake=0.00s triage=1.47s retrieve_fast=2.56s diagnose=14.85s verify=2.35s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.01s
+
+  [CLARIFY] Graph interrupted (organic (P4-5 sufficiency)). pending_question='Which appliance or system is making the rattling sound — for example, the AC unit (indoor or outdoor), the furnace, the fridge, or something else?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-006
+  [CLARIFY] Resuming with answer: 'It turned out to be the pipe under the kitchen sink - the curved section drips and rattles whenever water runs.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-006: Something in our unit is broken and it keeps makin...
+  trade=other urgency=routine complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[organic]: 'Which appliance or system is making the rattling sound — for example, the AC unit (indoor or outdoor), the furnace, the fridge, or something else?'
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 3, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=35.997s cost=$0.0833
+    cost[primary/diagnose]: $0.0571 (1 calls, 1744/794 tok, 13.00s)
+    cost[triage]: $0.0044 (1 calls, 1113/68 tok, 1.91s)
+    cost[verify/entailment]: $0.0160 (4 calls, 4663/132 tok, 5.50s)
+    cost[verify/sufficiency]: $0.0058 (1 calls, 1528/84 tok, 2.01s)
+    nodes: intake=0.00s triage=1.91s retrieve=19.25s clarify=0.01s diagnose=13.00s verify=1.74s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.02s
+
+----- run 3/3 -----
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-002
+  [CLARIFY] Resuming with answer: 'The noise is a loud rattling coming from the outdoor unit. It started about 2 days ago.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-002: HVAC system making strange noise. Not cooling prop...
+  trade=hvac urgency=urgent complexity=standard path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 5, 'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=29.938s cost=$0.1178
+    cost[primary/diagnose]: $0.0775 (1 calls, 1736/1202 tok, 16.28s)
+    cost[triage]: $0.0043 (1 calls, 1101/69 tok, 1.95s)
+    cost[verify/entailment]: $0.0360 (9 calls, 10518/297 tok, 16.75s)
+    nodes: intake=0.00s triage=1.95s retrieve=8.22s clarify=0.01s diagnose=16.29s verify=3.35s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.03s
+
+  [CLARIFY] Graph interrupted (injected). pending_question='Can you provide more details?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-005
+  [CLARIFY] Resuming with answer: 'The rattling comes from the outdoor unit on the roof. The air filter has not been changed in about a year. When it shuts off, it hums briefly and then goes silent — it comes back on its own maybe fifteen minutes later.'
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-005: The rooftop AC serving our floor has several probl...
+  trade=hvac urgency=urgent complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[injected]: 'Can you provide more details?'
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 3, 'part_number': 5} meets_min=True
+  retrieval@5=1.0 latency=35.088s cost=$0.1306
+    cost[primary/diagnose]: $0.0939 (1 calls, 1845/1509 tok, 20.88s)
+    cost[triage]: $0.0045 (1 calls, 1154/69 tok, 1.54s)
+    cost[verify/entailment]: $0.0322 (8 calls, 9406/264 tok, 26.77s)
+    nodes: intake=0.01s triage=1.54s retrieve=3.96s clarify=0.00s diagnose=20.88s verify=8.63s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.01s
+
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[PASS] EVAL-003: Strong gas smell near the furnace in the basement....
+  trade=gas urgency=emergency complexity=standard path=full escalated=True escalation_reason=hard_category
+  verify_pass=True work_order_id=False sku=False
+  grounding_rate=1.0 by_type={'descriptive': 1.0, 'part_number': 1.0} claims={'descriptive': 1, 'part_number': 2} meets_min=True
+  retrieval@5=1.0 latency=618.561s cost=$0.0220
+    cost[primary/diagnose]: $0.0053 (1 calls, 725/349 tok, 613.60s)
+    cost[triage]: $0.0043 (1 calls, 1108/68 tok, 1.50s)
+    cost[verify/entailment]: $0.0124 (3 calls, 3623/99 tok, 4.68s)
+    nodes: intake=0.00s triage=1.50s retrieve=1.82s diagnose=613.62s verify=1.57s safety_gate=0.02s
+
+[PASS] EVAL-004: Kitchen faucet dripping steadily from the spout. E...
+  trade=plumbing urgency=routine complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0} claims={'part_number': 4} meets_min=True
+  retrieval@5=1.0 latency=29.736s cost=$0.0857
+    cost[primary/diagnose]: $0.0603 (1 calls, 1658/875 tok, 15.88s)
+    cost[triage]: $0.0044 (1 calls, 1107/70 tok, 1.56s)
+    cost[verify/entailment]: $0.0157 (4 calls, 4584/132 tok, 17.42s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1498/50 tok, 1.44s)
+    nodes: intake=0.01s triage=1.56s retrieve_fast=1.53s diagnose=15.88s verify=10.34s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.21s
+
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+[PASS] EVAL-001: Leaking pipe under the kitchen sink. Water pooling...
+  trade=plumbing urgency=urgent complexity=simple path=fast escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 1, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=608.895s cost=$0.0209
+    cost[primary/diagnose]: $0.0036 (1 calls, 690/186 tok, 603.30s)
+    cost[triage]: $0.0044 (1 calls, 1108/70 tok, 1.63s)
+    cost[verify/entailment]: $0.0077 (2 calls, 2240/66 tok, 3.50s)
+    cost[verify/sufficiency]: $0.0052 (1 calls, 1486/50 tok, 1.75s)
+    nodes: intake=0.00s triage=1.63s retrieve_fast=1.77s diagnose=603.32s verify=2.08s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.03s
+
+  [CLARIFY] Graph interrupted (organic (P4-5 sufficiency)). pending_question='Which item is making the rattling sound — the outdoor AC unit, the fridge, a vent, or something else?'
+  [CLARIFY] Destroying graph instance (simulating process termination)...
+  [CLARIFY] Creating new graph instance with same checkpointer (simulating restart)
+  [CLARIFY] State recovered: ticket_id=EVAL-006
+  [CLARIFY] Resuming with answer: 'It turned out to be the pipe under the kitchen sink - the curved section drips and rattles whenever water runs.'
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+LiteLLM.Info: If you need to debug this error, use `litellm._turn_on_debug()'.
+
+  [CLARIFY] Resumed successfully. clarify_rounds=1
+[PASS] EVAL-006: Something in our unit is broken and it keeps makin...
+  trade=other urgency=routine complexity=complex path=full escalated=False escalation_reason=None
+  verify_pass=True work_order_id=True sku=True
+  clarify[organic]: 'Which item is making the rattling sound — the outdoor AC unit, the fridge, a vent, or something else?'
+  grounding_rate=1.0 by_type={'part_number': 1.0, 'descriptive': 1.0} claims={'part_number': 1, 'descriptive': 1} meets_min=True
+  retrieval@5=1.0 latency=645.328s cost=$0.0218
+    cost[primary/diagnose]: $0.0038 (1 calls, 757/194 tok, 606.65s)
+    cost[triage]: $0.0044 (1 calls, 1113/68 tok, 1.70s)
+    cost[verify/entailment]: $0.0079 (2 calls, 2317/66 tok, 2.78s)
+    cost[verify/sufficiency]: $0.0057 (1 calls, 1528/75 tok, 2.62s)
+    nodes: intake=0.00s triage=1.70s retrieve=35.19s clarify=0.01s diagnose=606.68s verify=1.43s safety_gate=0.00s resolve=0.00s procure=0.00s outcome=0.19s
+
+======================================================================
+Results: 17/18 passed
+Avg latency: 129.626s
+Avg latency per node: intake=0.02s triage=2.56s retrieve=10.44s diagnose=115.41s verify=3.64s safety_gate=0.01s resolve=0.00s procure=0.00s outcome=0.19s retrieve_fast=2.05s clarify=0.03s
+Total run cost: $1.6048 (primary/diagnose=$1.0925 triage=$0.0788 verify/entailment=$0.3905 verify/sufficiency=$0.0429)
+Avg cost/ticket: $0.0892
+
+Path split (BL-4 — fast vs full):
+  fast: n=6 avg_latency=120.427s avg_cost=$0.0761 avg_retrieve_fast=2.05s
+  full: n=12 avg_latency=134.226s avg_cost=$0.0957 avg_retrieve=10.44s
+
+Sufficiency check (P4-5d — per-ticket tax on the full path):
+  n=8 tickets paid the check: avg calls=1.0 avg cost=$0.0054 avg latency=2.09s
+
+Routing stability (non-gating): 6/18 runs deviated from expected_complexity
+  EVAL-001: expected=simple got=simple/simple/simple
+  EVAL-002: expected=complex got=standard/standard/standard <-- MISMATCH
+  EVAL-003: expected=standard got=standard/standard/standard
+  EVAL-004: expected=simple got=simple/simple/simple
+  EVAL-005: expected=complex got=complex/complex/complex
+  EVAL-006: expected=standard got=complex/complex/complex <-- MISMATCH
+
+Spread over 3 runs (DEC-20 — mean/min/max):
+  EVAL-001: grounding 1.00/1.00/1.00  cost $0.0668/$0.0209/$0.0899
+  EVAL-002: grounding 1.00/1.00/1.00  cost $0.1137/$0.1115/$0.1178
+  EVAL-003: grounding 1.00/1.00/1.00  cost $0.0641/$0.0220/$0.0880
+  EVAL-004: grounding 1.00/1.00/1.00  cost $0.0854/$0.0802/$0.0902
+  EVAL-005: grounding 1.00/1.00/1.00  cost $0.1191/$0.1105/$0.1306
+  EVAL-006: grounding 1.00/1.00/1.00  cost $0.0859/$0.0218/$0.1525
+Avg grounding rate: 1.00
+Grounding rate [descriptive]: 1.00 over 15 tickets
+Grounding rate [part_number]: 1.00 over 18 tickets
+Retrieval hit-rate@5: 1.00 over 18 annotated tickets (retrieval=live)
+ECE (uncalibrated grounding rate): 0.0556 over 18 tickets
+ECE (PlattCalibrator post-fit):    0.0000
+======================================================================
+
+ERROR:asyncio:Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x125269af0>
+ERROR:asyncio:Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x13daa9d00>
+ERROR:asyncio:Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x13d837680>
+ERROR:asyncio:Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x13daa4f30>, 973682.37491975), (<aiohttp.client_proto.ResponseHandler object at 0x13db1ce50>, 973682.4548055)])']
+connector: <aiohttp.connector.TCPConnector object at 0x13db20ec0>

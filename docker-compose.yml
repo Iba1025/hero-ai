@@ -1,0 +1,106 @@
+# Hero.AI pilot stack — LEAN MODE (Phase 6, DEC-27 as amended by DEC-29/30):
+# single Canadian-region 4 GB VM, Docker Compose, FOUR services — caddy, api,
+# postgres:16, qdrant. Embed/rerank are Bedrock-hosted in ca-central-1
+# (DEC-29, no torch in the image); Langfuse is deferred (DEC-30 — tracing
+# code is no-op-clean with LANGFUSE_* unset).
+#
+# Usage (local loop and server are identical):
+#   cp .env.production.example .env.production   # fill in secrets
+#   docker compose --env-file .env.production up -d --build
+#   docker compose --env-file .env.production run --rm api alembic upgrade head
+#
+# Exposure: ONLY caddy publishes public ports (80/443). Postgres/Qdrant are
+# compose-network internal — never published (DEC-27; Docker's iptables
+# rules BYPASS ufw for published ports, so a published port here would
+# silently punch through the droplet firewall).
+
+name: hero
+
+services:
+  # ── edge: TLS + static SPA + reverse proxy (docker/web.Dockerfile) ──────
+  caddy:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_started
+
+  # ── application (docker/api.Dockerfile — lean, no torch: DEC-29) ────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env.production}
+    environment:
+      # Compose owns the intra-network wiring; the env file owns secrets and
+      # tuning. environment: overrides env_file, so any localhost URLs in a
+      # copied dev env can never leak into the containers.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-hero}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hero}
+      QDRANT_URL: http://qdrant:6333
+      # DEC-30: Langfuse deferred from the pilot box — unset means tracing
+      # is a no-op (src/hero/observability/tracing.py).
+      LANGFUSE_HOST: ""
+    volumes:
+      # Manual PDFs for ingestion runs (never enter git or the image).
+      - ./data/manuals:/manuals:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    # start_period covers blocking orphan recovery (spec §3 serving
+    # lifecycle) — no model download any more (DEC-29).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+
+  # ── data stores ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in the env file}
+      POSTGRES_DB: ${POSTGRES_DB:-hero}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hero} -d ${POSTGRES_DB:-hero}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    # Server matched to the pinned qdrant-client 1.14.x (spec §1, DEC-3).
+    image: qdrant/qdrant:v1.14.1
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      # Qdrant's image ships no curl/wget; bash TCP probe against the HTTP port.
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  qdrant_data:
+  caddy_data:
+  caddy_config:

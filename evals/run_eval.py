@@ -81,6 +81,22 @@ def _ensure_fixtures_ingested(client: Any, embedder: Any) -> None:
     from hero.ingestion.ingest import COLLECTION_NAME, ingest_pdf
 
     collection_exists = COLLECTION_NAME in [c.name for c in client.get_collections().collections]
+
+    # Adapter switch guard (DEC-29 eval gate): a collection built by another
+    # embedder has a different dense dim (e.g. ColModernVBERT 128-multivector
+    # vs Bedrock Cohere 1024-single). Points would "exist", ingestion would
+    # skip, and every query would then fail on dim mismatch — recreate instead.
+    if collection_exists:
+        configured_dim = client.get_collection(COLLECTION_NAME).config.params.vectors["dense"].size
+        embedder_dim = len(embedder.embed_query("dimension probe")[0])
+        if configured_dim != embedder_dim:
+            print(
+                f"[QDRANT] collection dense dim {configured_dim} != embedder dim "
+                f"{embedder_dim} — recreating fixture collection for the adapter switch"
+            )
+            client.delete_collection(COLLECTION_NAME)
+            collection_exists = False
+
     for doc_id, pdf_path, manufacturer, model_codes in FIXTURE_MANUALS:
         if collection_exists:
             existing = client.count(
@@ -150,23 +166,31 @@ def _make_adapters(live: bool) -> dict[str, Any]:
             "qdrant_client": None,
         }
 
-    # --live: real adapters. Local only — needs keys, model downloads, Qdrant.
+    # --live: real adapters selected by config (DEC-29: EMBEDDER_IMPL /
+    # RERANKER_IMPL pick self-hosted vs Bedrock-hosted — the eval gate runs
+    # the SAME factory the API uses). Local only — needs keys and Qdrant.
     from qdrant_client import QdrantClient
 
-    from hero.adapters.bge_reranker import BGEReranker
-    from hero.adapters.colmodernvbert import ColModernVBertEmbedder
     from hero.adapters.litellm_vlm import LiteLLMVLM
+    from hero.api.deps import make_embedder, make_reranker
 
     settings = get_settings()
     if not (settings.anthropic_api_key or settings.openai_api_key):
         raise SystemExit(
             "--live requires ANTHROPIC_API_KEY and/or OPENAI_API_KEY in the environment/.env"
         )
+    if settings.embedder_impl == "stub" or settings.reranker_impl == "stub":
+        raise SystemExit(
+            "--live with a stub selector would measure nothing: set "
+            "EMBEDDER_IMPL/RERANKER_IMPL (e.g. colmodernvbert/bge or "
+            "bedrock_cohere/cohere — DEC-29)"
+        )
 
     client = QdrantClient(url=settings.qdrant_url, timeout=30)
     client.get_collections()  # fail loudly if Qdrant unreachable
 
-    embedder = ColModernVBertEmbedder()
+    embedder = make_embedder(settings)
+    reranker = make_reranker(settings)
     _ensure_fixtures_ingested(client, embedder)
 
     # Index-integrity canary (P3-4): version-stamp sweep + live BM25 probe.
@@ -198,11 +222,12 @@ def _make_adapters(live: bool) -> dict[str, Any]:
         f"[ADAPTERS] live (VLM=LiteLLMVLM primary={settings.vlm_model_primary} "
         f"verify={settings.vlm_model_verify} fallback={settings.vlm_model_fallback} "
         f"triage={triage_tier}, "
-        f"embedder=ColModernVBERT, reranker=BGE, qdrant={settings.qdrant_url})"
+        f"embedder={settings.embedder_impl}, reranker={settings.reranker_impl}, "
+        f"qdrant={settings.qdrant_url})"
     )
     return {
         "embedder": embedder,
-        "reranker": BGEReranker(),
+        "reranker": reranker,
         "vlm": LiteLLMVLM(
             primary_model=settings.vlm_model_primary,
             verify_model=settings.vlm_model_verify,
