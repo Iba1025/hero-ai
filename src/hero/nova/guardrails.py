@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from hero.safety.hazards import HAZARD_KEYWORDS
+from hero.safety.hazards import scan_hazards
 
 GuardrailAction = Literal["allow", "escalate", "redirect"]
 
@@ -147,9 +147,13 @@ def check_message(text: str) -> GuardrailDecision:
     """
     lowered = text.lower()
 
-    for kw in HAZARD_KEYWORDS:
-        if kw in lowered:
-            return GuardrailDecision(action="escalate", reason=f"hazard_keyword:{kw}")
+    hazard_hits = scan_hazards(lowered)
+    if hazard_hits:
+        # Reason keeps the pre-BL-81 "hazard_keyword:" prefix — it is a stored
+        # audit-trail format (storage/models.py guardrail_reason).
+        return GuardrailDecision(
+            action="escalate", reason=f"hazard_keyword:{hazard_hits[0].matched}"
+        )
 
     for pattern in _INJECTION_PATTERNS:
         m = pattern.search(lowered)
