@@ -5,7 +5,7 @@ API-hosted TEXT-ONLY embedding on Workers AI (``@cf/baai/bge-m3``, 1024-dim).
 ⚠️ **Residency: this is a recorded INV-2 exception, not compliance.** Workers
 AI runs inference on Cloudflare's global network with no Canadian residency
 commitment — page text and query text cross the border. Founder-approved
-2026-07-30 as a pilot exception alongside DEC-28 (R2), pending its DEC number;
+2026-07-30 as a pilot exception alongside DEC-28 (R2), recorded as DEC-87;
 recorded in ``docs/residency.md``. The Bedrock ca-central-1 adapter
 (``bedrock_embedder``) remains the INV-2-clean path and the migration target.
 

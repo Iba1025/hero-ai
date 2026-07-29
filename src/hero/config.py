@@ -170,7 +170,7 @@ class Settings(BaseSettings):
     )
 
     # ── Cloudflare Workers AI (lean-mode variant — RECORDED INV-2 EXCEPTION,
-    # founder-approved 2026-07-30 pending DEC number; see docs/residency.md) ──
+    # founder-approved 2026-07-30 recorded as DEC-87; see docs/residency.md) ──
     cloudflare_account_id: str = Field(
         default="",
         description=(
@@ -263,7 +263,7 @@ def region_guard(settings: Settings) -> None:
             continue
         # NOTE: Workers AI (embedder/reranker_impl == "cloudflare") has no region
         # string to check — it is a RECORDED INV-2 EXCEPTION (founder-approved
-        # 2026-07-30, pending DEC number), not compliance. docs/residency.md is
+        # 2026-07-30, recorded as DEC-87), not compliance. docs/residency.md is
         # the audit record; the Bedrock ca-central-1 adapters are the migration
         # target.
         # Detectable non-Canadian region → hard fail

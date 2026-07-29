@@ -16,7 +16,9 @@ if ssh "$HOST" 'test -f /opt/hero/.env.production'; then
     exit 1
 fi
 
-get() { grep -E "^$1=" .env | head -1 | cut -d= -f2-; }
+# || true: a missing key must return empty, not kill the script via set -e —
+# the callers' own -z checks decide what is fatal.
+get() { grep -E "^$1=" .env | head -1 | cut -d= -f2- || true; }
 gen() { openssl rand -hex 32; }
 
 # Lean-mode inference is Workers AI (founder decision 2026-07-30, recorded
@@ -46,7 +48,8 @@ cat > "$TMP" <<EOF
 # LEAN MODE (DEC-29/30). Infra secrets are machine-generated; see
 # .env.production.example for docs.
 
-# ── edge ──
+# ── edge ── (ACME_EMAIL only matters at the HTTPS flip; empty is fine —
+# the Caddyfile carries no email directive until then)
 SITE_ADDRESS=$SITE
 ACME_EMAIL=$(get ACME_EMAIL)
 
@@ -63,7 +66,7 @@ R2_SECRET_ACCESS_KEY=$(get R2_SECRET_ACCESS_KEY)
 R2_REGION=auto
 
 # ── Lean-mode inference: Cloudflare Workers AI (recorded INV-2 exception,
-# founder-approved 2026-07-30 pending DEC number — docs/residency.md).
+# founder-approved 2026-07-30 recorded as DEC-87 — docs/residency.md).
 # Bedrock ca-central-1 stays the INV-2-clean migration target (DEC-29). ──
 CLOUDFLARE_ACCOUNT_ID=$CF_ACCOUNT_ID
 CLOUDFLARE_API_TOKEN=$CF_TOKEN

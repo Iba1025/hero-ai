@@ -7,7 +7,7 @@ can be.
 
 ⚠️ **Residency: recorded INV-2 exception, not compliance** — query text and
 candidate chunk text cross the border (no Canadian residency commitment on
-Workers AI). Founder-approved 2026-07-30 pending its DEC number; recorded in
+Workers AI). Founder-approved 2026-07-30 recorded as DEC-87; recorded in
 ``docs/residency.md``. Bedrock Rerank 3.5 in ca-central-1
 (``cohere_reranker``) remains the INV-2-clean path and the migration target.
 

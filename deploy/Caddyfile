@@ -3,18 +3,20 @@
 # SITE_ADDRESS controls everything:
 #   - local compose loop:  SITE_ADDRESS=http://localhost   (plain HTTP, no ACME)
 #   - pilot server:        SITE_ADDRESS=hero.example.ca    (automatic HTTPS)
-# ACME_EMAIL is used for the Let's Encrypt account in production.
-
-{
-	email {$ACME_EMAIL:ops@example.invalid}
-}
+# No global `email` block: compose always sets ACME_EMAIL (empty when
+# absent), an empty-but-set var defeats the {$VAR:fallback} default, and a
+# bare `email` directive is a parse error that crash-loops caddy. ACME email
+# is optional — at the HTTPS flip, add `{ email you@domain }` back with a
+# real value if Let's Encrypt expiry notices are wanted.
 
 {$SITE_ADDRESS:http://localhost} {
 	encode zstd gzip
 
 	# API paths → api container. Everything the FastAPI app mounts
 	# (src/hero/api/main.py) plus the /health liveness probe.
-	@api path /auth/* /tickets/* /outcomes/* /uploads/* /public/* /health
+	# Bare prefixes matter: `/tickets/*` alone does NOT match the bare
+	# collection route `GET /tickets` — it fell through to the SPA.
+	@api path /auth /auth/* /tickets /tickets/* /outcomes /outcomes/* /uploads /uploads/* /public /public/* /health
 	handle @api {
 		reverse_proxy api:8000
 	}
