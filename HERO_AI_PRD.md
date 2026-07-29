@@ -938,7 +938,7 @@ to their bid file. Generate a proper document, not just a web page.
 | ID | Item | Effort | Why |
 |---|---|---|---|
 | **BL-0** | `OUTCOME` label capture: near-zero-friction confirm/correct; velocity tracked | ongoing | The moat |
-| **BL-42** | **Grant-hygiene invariant tests** | ~1 day | One day; closes the class of bug that silently voids §14's append-only enforcement on the safety and dispute records |
+| **BL-42** | ✅ 2026-07-29: **Grant-hygiene invariant tests** — `tests/invariants/test_grant_hygiene.py` runs the real alembic chain into a scratch DB, then asserts: no function grants EXECUTE to PUBLIC, every function pins `search_path`, and `job_event`/`live_hazard_event`/`dead_letter` (enforced-if-present) revoke UPDATE/DELETE/TRUNCATE with nothing granted to PUBLIC. Plus `test_inv12_single_resume.py`: AST allowlist asserting exactly one `Command(resume=…)` call site per graph (founder Q4 ruling) | ~1 day | Closes the class of bug that silently voids §14's append-only enforcement; a future migration that forgets fails CI |
 | **BL-73** | Compliance vault + packet automation | ~1 wk | 5 min vs 15 days; converts a design partner into a live network |
 | **BL-47** | **`party_identifier` + normalization + race-safe creation** | ~1 wk | **Migration 1.** Without it the registry fragments and `provider_metric` accumulates against ghosts |
 | **BL-35** | **Capacity model + `visit` + confirm loop + reminders** (on existing *text* intake) | ~2 wk | Validates the whole commercial premise in 2 weeks, no video/voice/residency dependency |
@@ -950,7 +950,7 @@ to their bid file. Generate a proper document, not just a web page.
 | **BL-74** | Scope Report artifact (preliminary + confirmed) | ~2 wk | INV-9 made concrete |
 | **BL-37** | Preliminary report delivery: SMS + email + signed mobile page + CRM | ~2 wk | The tech reads it before the truck moves |
 | **BL-50** | INV-19 stop-reason allowlist in the LiteLLM adapter | ~1 day | One place; prevents silently narrowed conformal sets |
-| **BL-49** | INV-18 injection suites per agent surface | ~3 days | Cheap; hardens surfaces about to be built |
+| **BL-49** | ✅ 2026-07-29 (current surfaces): **INV-18 injection suites** — `tests/unit/test_injection_nova.py` (instruction-override → fixed-copy redirect, never allow; hazard keyword outranks injection framing; replies never echo attacker text) + `tests/unit/test_injection_prompt_rendering.py` (retrieved/inbound text renders verbatim and inert — token lookalikes never re-expanded, template scaffolding intact; keyword floor + DEC-21 override beat injected downgrades even when the VLM parrots them). Grows one suite per new agent surface (copilot, coordinator, capture session) in that surface's PR | ~3 days | Cheap; hardens surfaces about to be built |
 | **BL-75** | Job graph + `_JobResumeGuard` + `job_event` ledger | ~2 wk | Structural prerequisite for the coordination plane |
 | **BL-41** | On-site confirm/correct + three-way visit fork + `CONFIRMED_SCOPE` | ~2 wk | **Label velocity starts here** |
 | **BL-3** | Eval pipeline, CI-gated, split by trade and `doc_class` (partially landed: golden-ticket eval + `--runs N`, `evals/run_eval.py`; not yet split by trade/`doc_class`) | ~1 wk | Prereq for BL-5/9/74/27 |
